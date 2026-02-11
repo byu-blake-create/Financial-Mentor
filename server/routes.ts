@@ -108,20 +108,19 @@ async function seedDatabase() {
       period: "February 2026"
     });
 
-    // Create Categories
+    // Create Categories from PDF data
     await storage.createCategory({ budgetId: budget.id, name: "Rent", allocatedAmount: "900", color: "#3b82f6" }); // 45%
     await storage.createCategory({ budgetId: budget.id, name: "Gas", allocatedAmount: "300", color: "#eab308" }); // 15%
     await storage.createCategory({ budgetId: budget.id, name: "Bills", allocatedAmount: "500", color: "#ef4444" }); // 25%
     await storage.createCategory({ budgetId: budget.id, name: "Savings", allocatedAmount: "300", color: "#22c55e" }); // 15%
 
-    // Create Transactions
-    await storage.createTransaction({ userId: DEMO_USER_ID, amount: "4.68", description: "Swig", date: new Date().toISOString() });
-    await storage.createTransaction({ userId: DEMO_USER_ID, amount: "8.24", description: "Taco Bell", date: new Date(Date.now() - 86400000).toISOString() });
-    await storage.createTransaction({ userId: DEMO_USER_ID, amount: "4.68", description: "Swig", date: new Date(Date.now() - 172800000).toISOString() });
-    await storage.createTransaction({ userId: DEMO_USER_ID, amount: "12.34", description: "In n Out", date: new Date(Date.now() - 259200000).toISOString() });
-    await storage.createTransaction({ userId: DEMO_USER_ID, amount: "45.00", description: "Gas Station", date: new Date(Date.now() - 345600000).toISOString() });
+    // Create Transactions from PDF data
+    await storage.createTransaction({ userId: DEMO_USER_ID, amount: "4.68", description: "Swig", date: "2025-01-18" });
+    await storage.createTransaction({ userId: DEMO_USER_ID, amount: "8.24", description: "Taco Bell", date: "2025-01-17" });
+    await storage.createTransaction({ userId: DEMO_USER_ID, amount: "4.68", description: "Swig", date: "2025-01-16" });
+    await storage.createTransaction({ userId: DEMO_USER_ID, amount: "12.34", description: "In n Out", date: "2025-01-15" });
 
-    // Create Modules
+    // Create Modules with images
     const moduleCategories = ["Recent", "Recommended", "Suggested", "Popular"];
     for (const cat of moduleCategories) {
       for (let i = 1; i <= 3; i++) {
@@ -130,7 +129,7 @@ async function seedDatabase() {
           description: "Learn about financial literacy in this exciting module.",
           category: cat,
           videoUrl: "#",
-          imageUrl: "https://placehold.co/600x400/png"
+          imageUrl: `/images/module_thumb_${i}.jpg`
         });
       }
     }
