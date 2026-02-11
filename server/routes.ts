@@ -31,9 +31,10 @@ export async function registerRoutes(
 
   app.get(api.dashboard.get.path, async (req, res) => {
     // In a real app: const userId = req.user?.id;
-    const userId = (req.user as any)?.claims?.sub || DEMO_USER_ID;
+    const user = req.user as any;
+    const userId = user?.claims?.sub || DEMO_USER_ID;
 
-    const budget = await storage.getUserBudget(userId);
+    const budget = await storage.getUserBudget(userId) || await storage.getUserBudget(DEMO_USER_ID);
     let budgetWithCategories = null;
     
     if (budget) {
@@ -42,11 +43,15 @@ export async function registerRoutes(
     }
 
     const recentTransactions = await storage.getTransactions(userId);
+    const displayTransactions = recentTransactions.length > 0 
+      ? recentTransactions 
+      : await storage.getTransactions(DEMO_USER_ID);
+
     const allModules = await storage.getModules();
 
     res.json({
       budget: budgetWithCategories,
-      recentTransactions: recentTransactions.slice(0, 5), // Limit to 5
+      recentTransactions: displayTransactions.slice(0, 5), // Limit to 5
       modules: {
         recent: allModules.filter(m => m.category === 'Recent'),
         recommended: allModules.filter(m => m.category === 'Recommended'),
@@ -64,9 +69,14 @@ export async function registerRoutes(
   });
 
   app.get(api.budget.get.path, async (req, res) => {
-    const userId = (req.user as any)?.claims?.sub || DEMO_USER_ID;
-    const budget = await storage.getUserBudget(userId);
+    const user = req.user as any;
+    const userId = user?.claims?.sub || DEMO_USER_ID;
+    let budget = await storage.getUserBudget(userId);
     
+    if (!budget) {
+      budget = await storage.getUserBudget(DEMO_USER_ID);
+    }
+
     if (!budget) {
       return res.status(404).json({ message: "Budget not found" });
     }
@@ -76,8 +86,12 @@ export async function registerRoutes(
   });
 
   app.get(api.transactions.list.path, async (req, res) => {
-    const userId = (req.user as any)?.claims?.sub || DEMO_USER_ID;
-    const transactions = await storage.getTransactions(userId);
+    const user = req.user as any;
+    const userId = user?.claims?.sub || DEMO_USER_ID;
+    let transactions = await storage.getTransactions(userId);
+    if (transactions.length === 0) {
+      transactions = await storage.getTransactions(DEMO_USER_ID);
+    }
     res.json(transactions);
   });
 
