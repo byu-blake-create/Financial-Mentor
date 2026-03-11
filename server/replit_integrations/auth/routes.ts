@@ -12,7 +12,10 @@ export function registerAuthRoutes(app: Express): void {
   // Get current authenticated user
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = Number(req.user?.id);
+      if (!Number.isFinite(userId)) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const user = await authStorage.getUser(userId);
       res.json(user);
     } catch (error) {

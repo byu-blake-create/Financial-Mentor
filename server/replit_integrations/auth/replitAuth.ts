@@ -7,7 +7,6 @@ import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
-import connectPg from "connect-pg-simple";
 import { authStorage } from "./storage";
 import { users } from "@shared/models/auth";
 import { db } from "../../db";
@@ -28,16 +27,8 @@ const getOidcConfig = memoize(
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
-    ttl: sessionTtl,
-    tableName: "sessions",
-  });
   return session({
     secret: process.env.SESSION_SECRET!,
-    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -60,12 +51,11 @@ function updateUserSession(
 }
 
 async function upsertUser(claims: any) {
-  await authStorage.upsertUser({
-    id: claims["sub"],
+  return authStorage.upsertUser({
     email: claims["email"],
+    password: "replit-oauth",
     firstName: claims["first_name"],
     lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
   });
 }
 
@@ -89,10 +79,6 @@ export async function setupAuth(app: Express) {
         try {
           const user = await authStorage.getUserByEmail(email);
           if (!user) {
-            return done(null, false, { message: "Invalid email or password" });
-          }
-
-          if (!user.password) {
             return done(null, false, { message: "Invalid email or password" });
           }
 
@@ -236,7 +222,11 @@ export async function setupAuth(app: Express) {
   ) => {
     const user = {};
     updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
+    const dbUser = await upsertUser(tokens.claims());
+    (user as any).id = dbUser.id;
+    (user as any).email = dbUser.email;
+    (user as any).firstName = dbUser.firstName;
+    (user as any).lastName = dbUser.lastName;
     verified(null, user);
   };
 

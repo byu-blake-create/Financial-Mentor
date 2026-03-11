@@ -1,48 +1,60 @@
-import { pgTable, text, serial, integer, boolean, timestamp, numeric, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, numeric, varchar, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
-// Export Auth and Chat models from blueprints
+// Export Auth model
 export * from "./models/auth";
-export * from "./models/chat";
 
 // Import for relations
 import { users } from "./models/auth";
 
 // === APP SPECIFIC TABLES ===
 
-export const budgets = pgTable("budgets", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id").notNull(), // Links to users.id from auth
-  totalAmount: numeric("total_amount").notNull(),
-  period: text("period").notNull(), // e.g., "January 2025"
+export const budgets = pgTable("budget", {
+  id: serial("budget_id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  monthlyLimit: numeric("monthly_limit", { precision: 10, scale: 2 }),
+  weeklyLimit: numeric("weekly_limit", { precision: 10, scale: 2 }),
+  date: timestamp("date").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const categories = pgTable("categories", {
-  id: serial("id").primaryKey(),
-  budgetId: integer("budget_id").notNull(),
-  name: text("name").notNull(), // Rent, Gas, etc.
-  allocatedAmount: numeric("allocated_amount").notNull(),
-  color: text("color").notNull(), // Hex code for UI
+export const categories = pgTable("budget_categories", {
+  id: serial("category_id").primaryKey(),
+  budgetId: integer("budget_id").notNull().references(() => budgets.id, { onDelete: "cascade" }),
+  label: varchar("label", { length: 100 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const transactions = pgTable("transactions", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id").notNull(),
-  amount: numeric("amount").notNull(),
-  description: text("description").notNull(),
-  date: date("date").notNull(),
-  categoryId: integer("category_id"), // Optional link to category
+  id: serial("transaction_id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  date: timestamp("date").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const modules = pgTable("modules", {
-  id: serial("id").primaryKey(),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  videoUrl: text("video_url"), // Placeholder URL
-  category: text("category").notNull(), // Recent, Recommended, Popular
-  imageUrl: text("image_url"), // For thumbnail
+  id: serial("module_id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  videoUrl: varchar("video_url", { length: 500 }),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const userProgress = pgTable("user_progress", {
+  id: serial("progress_id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  moduleId: integer("module_id").notNull().references(() => modules.id, { onDelete: "cascade" }),
+  status: boolean("status").default(false).notNull(),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // === RELATIONS ===
@@ -64,6 +76,7 @@ export const insertBudgetSchema = createInsertSchema(budgets).omit({ id: true })
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
 export const insertTransactionSchema = createInsertSchema(transactions).omit({ id: true });
 export const insertModuleSchema = createInsertSchema(modules).omit({ id: true });
+export const insertUserProgressSchema = createInsertSchema(userProgress).omit({ id: true });
 
 // === TYPES ===
 
@@ -78,6 +91,9 @@ export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 
 export type Module = typeof modules.$inferSelect;
 export type InsertModule = z.infer<typeof insertModuleSchema>;
+
+export type UserProgress = typeof userProgress.$inferSelect;
+export type InsertUserProgress = z.infer<typeof insertUserProgressSchema>;
 
 // === API TYPES ===
 

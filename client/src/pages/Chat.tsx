@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, User, Bot, Loader2, Mic } from "lucide-react";
+import { Send, User, Bot, Loader2, Mic, Plus } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl } from "@shared/routes";
+import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
@@ -61,12 +63,7 @@ export default function Chat() {
     }
   });
 
-  // Create if needed
-  useEffect(() => {
-    if (conversations && conversations.length === 0 && !createConversation.isPending && !activeConversationId) {
-      createConversation.mutate();
-    }
-  }, [conversations]);
+  // Create if needed - removed auto-create; user must click "New Chat"
 
   // 4. Fetch messages for active conversation
   const { data: conversationData, isLoading: isLoadingMessages } = useQuery({
@@ -78,10 +75,9 @@ export default function Chat() {
       return await res.json() as Conversation;
     },
     enabled: !!activeConversationId,
-    refetchInterval: 1000, // Poll for updates since we're using SSE for the stream
   });
 
-  // 5. Send message mutation (simulates streaming by polling after send)
+  // 5. Send message mutation with live SSE streaming updates
   const sendMessage = useMutation({
     mutationFn: async (content: string) => {
       if (!activeConversationId) throw new Error("No conversation");
@@ -94,8 +90,75 @@ export default function Chat() {
       });
       
       if (!res.ok) throw new Error("Failed to send");
-      // The response is a stream, but for this basic implementation we'll let the polling pick up the new messages
-      // Ideally we'd read the stream here
+
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error("Streaming not available");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let assistantMessageId: number | null = null;
+
+      const appendAssistantContent = (delta: string) => {
+        queryClient.setQueryData(['/api/conversations', activeConversationId], (old: Conversation | null | undefined) => {
+          if (!old) return old;
+
+          const messages = [...old.messages];
+          if (assistantMessageId === null) {
+            assistantMessageId = Date.now() + 1;
+            messages.push({
+              id: assistantMessageId,
+              role: 'assistant',
+              content: delta,
+              createdAt: new Date().toISOString(),
+            });
+          } else {
+            const idx = messages.findIndex((m) => m.id === assistantMessageId);
+            if (idx >= 0) {
+              messages[idx] = {
+                ...messages[idx],
+                content: `${messages[idx].content}${delta}`,
+              };
+            }
+          }
+
+          return { ...old, messages };
+        });
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+
+        for (const evt of events) {
+          const line = evt.split("\n").find((l) => l.startsWith("data: "));
+          if (!line) continue;
+
+          const payload = line.slice(6);
+          try {
+            const data = JSON.parse(payload) as { content?: string; done?: boolean; error?: string };
+
+            if (data.error) {
+              throw new Error(data.error);
+            }
+
+            if (data.content) {
+              appendAssistantContent(data.content);
+            }
+
+            if (data.done) {
+              return;
+            }
+          } catch (err) {
+            throw err instanceof Error ? err : new Error("Failed to process stream data");
+          }
+        }
+      }
     },
     onMutate: async (content) => {
       // Optimistic update
@@ -116,8 +179,14 @@ export default function Chat() {
       setInput("");
       return { previousConversation };
     },
-    onError: (err, newTodo, context) => {
+    onError: (err, _newMessage, context) => {
       queryClient.setQueryData(['/api/conversations', activeConversationId], context?.previousConversation);
+      const message = err instanceof Error ? err.message : "Failed to send message";
+      toast({
+        title: "Chat error",
+        description: message,
+        variant: "destructive",
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/conversations', activeConversationId] });
@@ -149,51 +218,88 @@ export default function Chat() {
             Online & Ready to help
           </p>
         </div>
+        <div className="ml-auto">
+          <button
+            onClick={() => createConversation.mutate()}
+            disabled={createConversation.isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-primary text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Chat
+          </button>
+        </div>
       </div>
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/10">
-        {conversationData?.messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={cn(
-              "flex w-full",
-              msg.role === "user" ? "justify-end" : "justify-start"
-            )}
-          >
+        {!activeConversationId ? (
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <Bot className="w-8 h-8 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold text-foreground">No conversation selected</p>
+              <p className="text-sm text-muted-foreground mt-1">Click "New Chat" to start talking to Prosper AI.</p>
+            </div>
+            <button
+              onClick={() => createConversation.mutate()}
+              disabled={createConversation.isPending}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors shadow-lg shadow-primary/25"
+            >
+              <Plus className="w-4 h-4" />
+              Start New Chat
+            </button>
+          </div>
+        ) : (
+          <>
+            {conversationData?.messages.map((msg) => (
             <div
+              key={msg.id}
               className={cn(
-                "flex max-w-[80%] items-start gap-3 p-4 rounded-2xl shadow-sm",
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-tr-none"
-                  : "bg-white dark:bg-slate-800 border rounded-tl-none"
+                "flex w-full",
+                msg.role === "user" ? "justify-end" : "justify-start"
               )}
             >
-              {msg.role === "assistant" && (
-                <Bot className="w-5 h-5 mt-1 shrink-0 opacity-70" />
-              )}
-              <p className="leading-relaxed text-sm whitespace-pre-wrap">{msg.content}</p>
-              {msg.role === "user" && user?.profileImageUrl && (
-                <img src={user.profileImageUrl} alt="me" className="w-6 h-6 rounded-full mt-1 shrink-0" />
-              )}
-            </div>
-          </div>
-        ))}
-        
-        {sendMessage.isPending && (
-          <div className="flex justify-start">
-            <div className="bg-white dark:bg-slate-800 border rounded-2xl rounded-tl-none p-4 flex items-center gap-2">
-              <Bot className="w-5 h-5 opacity-70" />
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce" />
+              <div
+                className={cn(
+                  "flex max-w-[80%] items-start gap-3 p-4 rounded-2xl shadow-sm",
+                  msg.role === "user"
+                    ? "bg-primary text-primary-foreground rounded-tr-none"
+                    : "bg-white dark:bg-slate-800 border rounded-tl-none"
+                )}
+              >
+                {msg.role === "assistant" && (
+                  <Bot className="w-5 h-5 mt-1 shrink-0 opacity-70" />
+                )}
+                {msg.role === "assistant" ? (
+                  <div className="leading-relaxed text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="leading-relaxed text-sm whitespace-pre-wrap">{msg.content}</p>
+                )}
+                {msg.role === "user" && user?.profileImageUrl && (
+                  <img src={user.profileImageUrl} alt="me" className="w-6 h-6 rounded-full mt-1 shrink-0" />
+                )}
               </div>
             </div>
-          </div>
-        )}
+            ))}
         
-        <div ref={messagesEndRef} />
+            {sendMessage.isPending && (
+              <div className="flex justify-start">
+                <div className="bg-white dark:bg-slate-800 border rounded-2xl rounded-tl-none p-4 flex items-center gap-2">
+                  <Bot className="w-5 h-5 opacity-70" />
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                    <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce" />
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </>
+        )}
       </div>
 
       {/* Input Area */}

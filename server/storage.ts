@@ -12,7 +12,7 @@ import { chatStorage, type IChatStorage } from "./replit_integrations/chat/stora
 
 export interface IStorage extends IAuthStorage, IChatStorage {
   // Budget
-  getUserBudget(userId: string): Promise<Budget | undefined>;
+  getUserBudget(userId: number): Promise<Budget | undefined>;
   createBudget(budget: InsertBudget): Promise<Budget>;
   updateBudget(budgetId: number, updates: Partial<InsertBudget>): Promise<Budget>;
   
@@ -23,7 +23,7 @@ export interface IStorage extends IAuthStorage, IChatStorage {
   deleteCategory(categoryId: number): Promise<void>;
   
   // Transactions
-  getTransactions(userId: string): Promise<Transaction[]>;
+  getTransactions(userId: number): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   
   // Modules
@@ -35,6 +35,7 @@ export interface IStorage extends IAuthStorage, IChatStorage {
 export class DatabaseStorage implements IStorage {
   // Inherit Auth Storage methods
   getUser = authStorage.getUser.bind(authStorage);
+  getUserByEmail = authStorage.getUserByEmail.bind(authStorage);
   upsertUser = authStorage.upsertUser.bind(authStorage);
   
   // Inherit Chat Storage methods
@@ -47,7 +48,7 @@ export class DatabaseStorage implements IStorage {
 
   // === App Implementation ===
 
-  async getUserBudget(userId: string): Promise<Budget | undefined> {
+  async getUserBudget(userId: number): Promise<Budget | undefined> {
     const [budget] = await db.select().from(budgets).where(eq(budgets.userId, userId));
     return budget;
   }
@@ -94,7 +95,7 @@ export class DatabaseStorage implements IStorage {
     return budget;
   }
 
-  async getTransactions(userId: string): Promise<Transaction[]> {
+  async getTransactions(userId: number): Promise<Transaction[]> {
     return db.select().from(transactions).where(eq(transactions.userId, userId)).orderBy(desc(transactions.date));
   }
 
