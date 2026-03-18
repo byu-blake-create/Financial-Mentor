@@ -89,7 +89,23 @@ export default function Chat() {
         credentials: 'include'
       });
       
-      if (!res.ok) throw new Error("Failed to send");
+      if (!res.ok) {
+        let details = "";
+        try {
+          const data = await res.json() as { error?: string; message?: string };
+          details = data.error || data.message || "";
+        } catch {
+          try {
+            details = await res.text();
+          } catch {
+            details = "";
+          }
+        }
+
+        const statusLine = `${res.status} ${res.statusText}`.trim();
+        const suffix = details ? `: ${details}` : "";
+        throw new Error(`${statusLine}${suffix}`);
+      }
 
       const reader = res.body?.getReader();
       if (!reader) {
