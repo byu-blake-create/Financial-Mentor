@@ -113,6 +113,7 @@ type ModuleRow = {
   module_id: number;
   title: string;
   video_url: string | null;
+  image_url: string | null;
   description: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -123,6 +124,7 @@ function moduleFromRow(row: ModuleRow): Module {
     id: row.module_id,
     title: row.title,
     videoUrl: row.video_url,
+    imageUrl: row.image_url,
     description: row.description,
     createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at),
@@ -133,6 +135,7 @@ function moduleToRow(insertModule: Partial<InsertModule>) {
   return {
     title: insertModule.title,
     video_url: insertModule.videoUrl ?? null,
+    image_url: insertModule.imageUrl ?? null,
     description: insertModule.description ?? null,
     updated_at: new Date().toISOString(),
   };

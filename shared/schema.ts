@@ -42,6 +42,7 @@ export const modules = pgTable("modules", {
   id: serial("module_id").primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
   videoUrl: varchar("video_url", { length: 500 }),
+  imageUrl: varchar("image_url", { length: 500 }),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
