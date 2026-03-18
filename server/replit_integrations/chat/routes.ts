@@ -3,6 +3,8 @@ import OpenAI from "openai";
 import { chatStorage } from "./storage";
 import { isAuthenticated } from "../auth";
 
+const GEMINI_DEFAULT_MODELS = ["gemini-flash-latest", "gemini-2.5-flash"];
+
 // Lazy initialization of OpenAI client
 function getOpenAIClient(): OpenAI {
   const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -30,8 +32,41 @@ function getModel(): string {
     return process.env.GEMINI_MODEL;
   }
 
-  return "gemini-2.5-flash";
-  
+  return "gemini-flash-latest";
+}
+
+function getModelCandidates(): string[] {
+  const configured = (process.env.GEMINI_MODEL || "").trim();
+  const models = [configured, ...GEMINI_DEFAULT_MODELS].filter(Boolean);
+  return Array.from(new Set(models));
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  const status = (error as { status?: unknown } | undefined)?.status;
+  return typeof status === "number" ? status : undefined;
+}
+
+function shouldTryNextModel(error: unknown): boolean {
+  const status = getErrorStatus(error);
+  return status === 400 || status === 403 || status === 404;
+}
+
+function formatProviderError(error: unknown): string {
+  const status = getErrorStatus(error);
+  const providerMessage =
+    (error as { error?: { message?: string } } | undefined)?.error?.message ||
+    (error as { message?: string } | undefined)?.message ||
+    "Unknown AI provider error";
+
+  if (status === 403) {
+    return `${providerMessage}. Verify GEMINI_API_KEY permissions and try GEMINI_MODEL=gemini-flash-latest.`;
+  }
+
+  if (status === 404) {
+    return `${providerMessage}. The configured model may be unavailable for this key.`;
+  }
+
+  return providerMessage;
 }
 
 export function registerChatRoutes(app: Express): void {
@@ -129,21 +164,41 @@ export function registerChatRoutes(app: Express): void {
         content: m.content,
       }));
 
-      // Set up SSE
+      // Create stream first so provider errors can be returned as normal JSON responses.
+      const openai = getOpenAIClient();
+      let stream: Awaited<ReturnType<typeof openai.chat.completions.create>> | null = null;
+      let selectedModel = getModel();
+      let lastProviderError: unknown;
+
+      const modelCandidates = getModelCandidates();
+      for (const model of modelCandidates) {
+        try {
+          stream = await openai.chat.completions.create({
+            model,
+            messages: chatMessages,
+            stream: true,
+            max_completion_tokens: 2048,
+          });
+          selectedModel = model;
+          break;
+        } catch (providerError) {
+          lastProviderError = providerError;
+          if (!shouldTryNextModel(providerError)) {
+            break;
+          }
+        }
+      }
+
+      if (!stream) {
+        throw lastProviderError ?? new Error("Failed to start AI response stream");
+      }
+
+      // Set up SSE only after stream is ready.
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
       res.setHeader("X-Accel-Buffering", "no");
       res.flushHeaders();
-
-      // Stream response from OpenAI
-      const openai = getOpenAIClient();
-      const stream = await openai.chat.completions.create({
-        model: getModel(),
-        messages: chatMessages,
-        stream: true,
-        max_completion_tokens: 2048,
-      });
 
       let fullResponse = "";
 
@@ -158,17 +213,22 @@ export function registerChatRoutes(app: Express): void {
       // Save assistant message
       await chatStorage.createMessage(sessionId, conversationId, "assistant", fullResponse);
 
+      if (selectedModel !== getModel()) {
+        console.warn(`Configured model \"${getModel()}\" failed, fallback model \"${selectedModel}\" was used.`);
+      }
+
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
     } catch (error) {
       console.error("Error sending message:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to send message";
+      const errorMessage = formatProviderError(error);
       // Check if headers already sent (SSE streaming started)
       if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
         res.end();
       } else {
-        res.status(500).json({ error: errorMessage });
+        const status = getErrorStatus(error) ?? 500;
+        res.status(status).json({ error: errorMessage });
       }
     }
   });
