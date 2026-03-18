@@ -32,7 +32,6 @@ function toClientModule(module: any, category: string) {
   return {
     ...module,
     category,
-    imageUrl: null,
   };
 }
 

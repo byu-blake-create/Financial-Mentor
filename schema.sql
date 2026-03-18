@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS modules (
     module_id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     video_url VARCHAR(500),
+    image_url VARCHAR(500),
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
