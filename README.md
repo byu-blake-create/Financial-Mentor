@@ -40,6 +40,32 @@ Financial Mentor is a web app that helps college students (18–25) build basic 
 | **Authentication** | Passport.js with Local Strategy (email/password), bcrypt for password hashing |
 | **External Services** | OpenAI API (AI chat assistant) |
 
+## AI Chatbot
+
+The AI chatbot ("Prosper AI Expert") provides conversational financial coaching in the app's **Chat** page.
+
+### What it does
+
+- Starts and manages conversations per authenticated user.
+- Streams assistant responses in real time (SSE) for a smoother chat experience.
+- Supports Markdown in assistant messages for readable lists and structured explanations.
+- Shows clear loading/typing state while a response is being generated.
+
+### Accessibility and Mobile UX
+
+The chat interface is designed to meet Lighthouse accessibility expectations by using:
+
+- Semantic regions (`header`, `main`, `footer`) and accessible labels.
+- Properly labeled controls for icon buttons and message input.
+- Keyboard-visible focus rings and screen-reader friendly status updates.
+- Improved contrast for action buttons and user message bubbles.
+- Responsive spacing and message widths for smaller screens.
+- Dynamic viewport height handling (`dvh`) so the chat layout fits mobile browsers more reliably.
+
+### Current limitation
+
+- Voice input button is present for future functionality but currently disabled.
+
 ## Architecture Diagram
 
 ```
