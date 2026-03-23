@@ -119,14 +119,14 @@ Start from the provided `.env.example` template and create a local `.env` file i
 cp .env.example .env
 ```
 
-Then replace the placeholder values in `.env`:
+Then fill in the values in `.env` with your own credentials. Keep this file untracked and do not commit secrets:
 
 ```bash
 PORT=4000
-SESSION_SECRET=replace-with-a-random-secret
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=replace-with-your-supabase-service-role-key
-GEMINI_API_KEY=replace-with-your-gemini-api-key
+SESSION_SECRET=
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+GEMINI_API_KEY=
 GEMINI_MODEL=gemini-flash-latest
 ```
 
@@ -181,4 +181,3 @@ Open the Supabase dashboard and check the relevant table (for example `budget_ca
 ### 5. Verify persistence
 
 Refresh the page in your browser. The budget page should still reflect the changes you made — the new or updated category should appear in both the category list and the pie chart, confirming that the data was persisted to Supabase.
-
