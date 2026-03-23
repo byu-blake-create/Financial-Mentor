@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, User, Bot, Loader2, Mic, Plus } from "lucide-react";
+import { Send, Bot, Loader2, Mic, Plus } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,6 +24,7 @@ interface Conversation {
 export default function Chat() {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatLogRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
@@ -220,17 +221,26 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversationData?.messages]);
 
+  useEffect(() => {
+    if (!sendMessage.isPending && activeConversationId) {
+      chatLogRef.current?.focus();
+    }
+  }, [sendMessage.isPending, activeConversationId]);
+
   return (
-    <div className="flex flex-col h-[calc(100vh-2rem)] bg-card rounded-2xl border shadow-sm overflow-hidden animate-in fade-in duration-500">
+    <section
+      aria-labelledby="chat-heading"
+      className="flex flex-col h-[calc(100dvh-1rem)] sm:h-[calc(100vh-2rem)] bg-card rounded-2xl border shadow-sm overflow-hidden animate-in fade-in duration-500"
+    >
       {/* Chat Header */}
-      <div className="bg-primary/5 border-b p-4 flex items-center gap-3">
-        <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/20">
+      <header className="bg-primary/5 border-b p-3 sm:p-4 flex items-center gap-3">
+        <div className="h-10 w-10 rounded-full bg-emerald-800 flex items-center justify-center text-white shadow-lg shadow-emerald-900/20" aria-hidden="true">
           <Bot className="w-6 h-6" />
         </div>
         <div>
-          <h1 className="font-bold text-lg font-display text-foreground">Prosper AI Expert</h1>
+          <h1 id="chat-heading" className="font-bold text-base sm:text-lg font-display text-foreground">Prosper AI Expert</h1>
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" aria-hidden="true" />
             Online & Ready to help
           </p>
         </div>
@@ -238,20 +248,30 @@ export default function Chat() {
           <button
             onClick={() => createConversation.mutate()}
             disabled={createConversation.isPending}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-primary text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
+            aria-label="Start a new chat"
           >
-            <Plus className="w-4 h-4" />
-            New Chat
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            <span className="hidden sm:inline">New Chat</span>
+            <span className="sm:hidden">New</span>
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/10">
+      <main
+        ref={chatLogRef}
+        className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 bg-muted/10"
+        role="log"
+        aria-live="polite"
+        aria-label="Chat conversation"
+        aria-busy={sendMessage.isPending}
+        tabIndex={0}
+      >
         {!activeConversationId ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <Bot className="w-8 h-8 text-primary" />
+              <Bot className="w-8 h-8 text-primary" aria-hidden="true" />
             </div>
             <div>
               <p className="font-semibold text-foreground">No conversation selected</p>
@@ -260,9 +280,9 @@ export default function Chat() {
             <button
               onClick={() => createConversation.mutate()}
               disabled={createConversation.isPending}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors shadow-lg shadow-primary/25"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-emerald-900/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4" aria-hidden="true" />
               Start New Chat
             </button>
           </div>
@@ -278,14 +298,15 @@ export default function Chat() {
             >
               <div
                 className={cn(
-                  "flex max-w-[80%] items-start gap-3 p-4 rounded-2xl shadow-sm",
+                  "flex max-w-[92%] sm:max-w-[80%] items-start gap-3 p-3 sm:p-4 rounded-2xl shadow-sm",
                   msg.role === "user"
-                    ? "bg-primary text-primary-foreground rounded-tr-none"
+                    ? "bg-emerald-800 text-white rounded-tr-none"
                     : "bg-white dark:bg-slate-800 border rounded-tl-none"
                 )}
+                aria-label={msg.role === "user" ? "Your message" : "Prosper AI response"}
               >
                 {msg.role === "assistant" && (
-                  <Bot className="w-5 h-5 mt-1 shrink-0 opacity-70" />
+                  <Bot className="w-5 h-5 mt-1 shrink-0 opacity-70" aria-hidden="true" />
                 )}
                 {msg.role === "assistant" ? (
                   <div className="leading-relaxed text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0">
@@ -295,63 +316,72 @@ export default function Chat() {
                   <p className="leading-relaxed text-sm whitespace-pre-wrap">{msg.content}</p>
                 )}
                 {msg.role === "user" && user?.profileImageUrl && (
-                  <img src={user.profileImageUrl} alt="me" className="w-6 h-6 rounded-full mt-1 shrink-0" />
+                  <img src={user.profileImageUrl} alt="Your profile" className="w-6 h-6 rounded-full mt-1 shrink-0" />
                 )}
               </div>
             </div>
             ))}
         
             {sendMessage.isPending && (
-              <div className="flex justify-start">
+              <div className="flex justify-start" role="status" aria-live="polite" aria-label="Prosper AI is typing">
                 <div className="bg-white dark:bg-slate-800 border rounded-2xl rounded-tl-none p-4 flex items-center gap-2">
-                  <Bot className="w-5 h-5 opacity-70" />
-                  <div className="flex gap-1">
+                  <Bot className="w-5 h-5 opacity-70" aria-hidden="true" />
+                  <div className="flex gap-1" aria-hidden="true">
                     <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.3s]" />
                     <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.15s]" />
                     <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce" />
                   </div>
+                  <span className="sr-only">Generating response</span>
                 </div>
               </div>
             )}
             <div ref={messagesEndRef} />
           </>
         )}
-      </div>
+      </main>
 
       {/* Input Area */}
-      <div className="p-4 bg-card border-t">
-        <form onSubmit={handleSubmit} className="flex gap-2">
+      <footer className="p-3 sm:p-4 bg-card border-t">
+        <form onSubmit={handleSubmit} className="flex gap-2" aria-label="Send a message to Prosper AI">
           <div className="relative flex-1">
+            <label htmlFor="chat-message-input" className="sr-only">
+              Message to Prosper AI
+            </label>
             <input
+              id="chat-message-input"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask about your budget, savings, or investing..."
-              className="w-full px-4 py-3 pr-12 rounded-xl bg-muted/50 border-transparent focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+              className="w-full px-4 py-3 pr-12 rounded-xl bg-muted/50 border border-input focus:bg-background focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 transition-all outline-none"
               disabled={sendMessage.isPending || !activeConversationId}
+              aria-describedby="chat-disclaimer"
             />
             <button 
               type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-emerald-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 rounded-md"
+              aria-label="Voice input not available yet"
+              disabled
             >
-              <Mic className="w-5 h-5" />
+              <Mic className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
           <button
             type="submit"
             disabled={!input.trim() || sendMessage.isPending || !activeConversationId}
-            className="bg-primary text-white p-3 rounded-xl hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30"
+            className="bg-emerald-800 text-white p-3 rounded-xl hover:bg-emerald-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-900/25 hover:shadow-xl hover:shadow-emerald-900/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
+            aria-label="Send message"
           >
             {sendMessage.isPending ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
             ) : (
-              <Send className="w-5 h-5" />
+              <Send className="w-5 h-5" aria-hidden="true" />
             )}
           </button>
         </form>
-        <p className="text-center text-xs text-muted-foreground mt-2">
+        <p id="chat-disclaimer" className="text-center text-xs text-muted-foreground mt-2">
           Prosper AI provides financial guidance, not professional advice.
         </p>
-      </div>
-    </div>
+      </footer>
+    </section>
   );
 }
