@@ -113,13 +113,21 @@ npm install
 
 ### 3. Configure environment variables
 
-Create a `.env` file in the project root:
+Start from the provided `.env.example` template and create a local `.env` file in the project root:
+
+```bash
+cp .env.example .env
+```
+
+Then replace the placeholder values in `.env`:
 
 ```bash
 PORT=4000
-SESSION_SECRET=your-session-secret-here
-SUPABASE_URL=your-supabase-project-url
-SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+SESSION_SECRET=replace-with-a-random-secret
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=replace-with-your-supabase-service-role-key
+GEMINI_API_KEY=replace-with-your-gemini-api-key
+GEMINI_MODEL=gemini-flash-latest
 ```
 
 | Variable | Description |
@@ -128,6 +136,8 @@ SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
 | `SESSION_SECRET` | Secret used to sign session cookies |
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
+| `GEMINI_API_KEY` | API key for the AI chat integration |
+| `GEMINI_MODEL` | Optional Gemini model override |
 
 ## Running the Application
 
@@ -171,5 +181,4 @@ Open the Supabase dashboard and check the relevant table (for example `budget_ca
 ### 5. Verify persistence
 
 Refresh the page in your browser. The budget page should still reflect the changes you made — the new or updated category should appear in both the category list and the pie chart, confirming that the data was persisted to Supabase.
-
 
