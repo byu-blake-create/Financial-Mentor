@@ -18,6 +18,7 @@ import ModuleDetail from "@/pages/ModuleDetail";
 import Chat from "@/pages/Chat";
 import Transactions from "@/pages/Transactions";
 import FinancialGoals from "@/pages/FinancialGoals";
+import EditProfileInformation from "@/pages/EditProfileInformation";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 
@@ -76,6 +77,7 @@ function Router() {
         <Route path="/chat" component={Chat} />
         <Route path="/transactions" component={Transactions} />
         <Route path="/goals" component={FinancialGoals} />
+        <Route path="/edit-profile" component={EditProfileInformation} />
         <Route component={NotFound} />
       </Switch>
     </ProtectedLayout>
