@@ -46,9 +46,11 @@ export const api = {
       path: '/api/modules' as const,
       responses: {
         200: z.object({
-          keepLearning: z.array(z.custom<typeof modules.$inferSelect>()),
-          suggested: z.array(z.custom<typeof modules.$inferSelect>()),
-          popular: z.array(z.custom<typeof modules.$inferSelect>()),
+          suggested: z.array(z.custom<typeof modules.$inferSelect & { watched?: boolean; watchLater?: boolean }>()),
+          popular: z.array(z.custom<typeof modules.$inferSelect & { watched?: boolean; watchLater?: boolean }>()),
+          all: z.array(z.custom<typeof modules.$inferSelect & { watched?: boolean; watchLater?: boolean }>()),
+          watchLater: z.array(z.custom<typeof modules.$inferSelect & { watched?: boolean; watchLater?: boolean }>()),
+          watched: z.array(z.custom<typeof modules.$inferSelect & { watched?: boolean; watchLater?: boolean }>()),
         }),
       },
     },

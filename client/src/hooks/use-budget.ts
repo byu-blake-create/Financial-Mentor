@@ -3,7 +3,7 @@ import { api } from "@shared/routes";
 
 export interface BudgetWithCategories {
   id: number;
-  userId: string;
+  userId: number;
   totalAmount: string;
   period: string;
   categories: Category[];
@@ -20,10 +20,11 @@ export interface Category {
 export function useBudget() {
   return useQuery({
     queryKey: [api.budget.get.path],
-    queryFn: async () => {
+    queryFn: async (): Promise<BudgetWithCategories | null> => {
       const res = await fetch(api.budget.get.path, { credentials: "include" });
+      if (res.status === 404) return null;
       if (!res.ok) throw new Error("Failed to fetch budget");
-      return await res.json() as BudgetWithCategories;
+      return (await res.json()) as BudgetWithCategories;
     },
   });
 }
