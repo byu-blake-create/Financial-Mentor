@@ -25,6 +25,8 @@ export const categories = pgTable("budget_categories", {
   id: serial("category_id").primaryKey(),
   budgetId: integer("budget_id").notNull().references(() => budgets.id, { onDelete: "cascade" }),
   label: varchar("label", { length: 100 }).notNull(),
+  allocatedAmount: numeric("allocated_amount", { precision: 12, scale: 2 }).default("0").notNull(),
+  color: varchar("color", { length: 32 }).default("#64748b").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -53,6 +55,7 @@ export const userProgress = pgTable("user_progress", {
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   moduleId: integer("module_id").notNull().references(() => modules.id, { onDelete: "cascade" }),
   status: boolean("status").default(false).notNull(),
+  watchLater: boolean("watch_later").default(false).notNull(),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -108,7 +111,6 @@ export type DashboardDataResponse = {
 };
 
 export type ModulesResponse = {
-  keepLearning: Module[];
   suggested: Module[];
   popular: Module[];
 };
