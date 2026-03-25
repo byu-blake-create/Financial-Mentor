@@ -3,10 +3,12 @@ import {
   type Category,
   type Transaction,
   type Module,
+  type Goal,
   type InsertBudget,
   type InsertCategory,
   type InsertTransaction,
   type InsertModule,
+  type InsertGoal,
 } from "@shared/schema";
 import { supabase } from "./db";
 
@@ -141,6 +143,42 @@ function moduleToRow(insertModule: Partial<InsertModule>) {
   };
 }
 
+type GoalRow = {
+  goal_id: number;
+  user_id: number;
+  kind: string;
+  preset_id: string | null;
+  title: string;
+  description: string | null;
+  category_label: string | null;
+  category_id: string | null;
+  target_amount: string;
+  saved_amount: string;
+  unit: string;
+  deadline: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function goalFromRow(row: GoalRow): Goal {
+  return {
+    id: row.goal_id,
+    userId: row.user_id,
+    kind: row.kind,
+    presetId: row.preset_id,
+    title: row.title,
+    description: row.description,
+    categoryLabel: row.category_label,
+    categoryId: row.category_id,
+    targetAmount: row.target_amount,
+    savedAmount: row.saved_amount,
+    unit: row.unit,
+    deadline: toDate(row.deadline),
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  };
+}
+
 export interface IStorage extends IAuthStorage, IChatStorage {
   // Budget
   getUserBudget(userId: number): Promise<Budget | undefined>;
@@ -161,6 +199,12 @@ export interface IStorage extends IAuthStorage, IChatStorage {
   getModules(): Promise<Module[]>;
   getModule(id: number): Promise<Module | undefined>;
   createModule(module: InsertModule): Promise<Module>;
+
+  // Goals
+  getGoalsByUser(userId: number): Promise<Goal[]>;
+  createGoal(userId: number, data: InsertGoal): Promise<Goal>;
+  updateGoal(goalId: number, userId: number, updates: Partial<InsertGoal>): Promise<Goal>;
+  deleteGoal(goalId: number, userId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -286,6 +330,76 @@ export class DatabaseStorage implements IStorage {
     const { data, error } = await supabase.from("modules").insert(moduleToRow(insertModule)).select("*").single();
     if (error) throw error;
     return moduleFromRow(data as ModuleRow);
+  }
+
+  async getGoalsByUser(userId: number): Promise<Goal[]> {
+    const { data, error } = await supabase
+      .from("goals")
+      .select("*")
+      .eq("user_id", userId)
+      .order("goal_id", { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((r) => goalFromRow(r as GoalRow));
+  }
+
+  async createGoal(userId: number, input: InsertGoal): Promise<Goal> {
+    const { data, error } = await supabase
+      .from("goals")
+      .insert({
+        user_id: userId,
+        kind: input.kind ?? "custom",
+        preset_id: input.presetId ?? null,
+        title: input.title,
+        description: input.description ?? null,
+        category_label: input.categoryLabel ?? null,
+        category_id: input.categoryId ?? null,
+        target_amount: String(input.targetAmount ?? 0),
+        saved_amount: String(input.savedAmount ?? 0),
+        unit: input.unit ?? "usd",
+        deadline: input.deadline
+          ? (input.deadline instanceof Date ? input.deadline : new Date(String(input.deadline))).toISOString()
+          : null,
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return goalFromRow(data as GoalRow);
+  }
+
+  async updateGoal(goalId: number, userId: number, updates: Partial<InsertGoal>): Promise<Goal> {
+    const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (updates.title !== undefined) row.title = updates.title;
+    if (updates.description !== undefined) row.description = updates.description ?? null;
+    if (updates.categoryLabel !== undefined) row.category_label = updates.categoryLabel ?? null;
+    if (updates.categoryId !== undefined) row.category_id = updates.categoryId ?? null;
+    if (updates.targetAmount !== undefined) row.target_amount = String(updates.targetAmount ?? 0);
+    if (updates.savedAmount !== undefined) row.saved_amount = String(updates.savedAmount ?? 0);
+    if (updates.unit !== undefined) row.unit = updates.unit;
+    if (updates.deadline !== undefined) {
+      row.deadline = updates.deadline === null
+        ? null
+        : (updates.deadline instanceof Date ? updates.deadline : new Date(String(updates.deadline))).toISOString();
+    }
+
+    const { data, error } = await supabase
+      .from("goals")
+      .update(row)
+      .eq("goal_id", goalId)
+      .eq("user_id", userId)
+      .select("*")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("Goal not found");
+    return goalFromRow(data as GoalRow);
+  }
+
+  async deleteGoal(goalId: number, userId: number): Promise<void> {
+    const { error } = await supabase
+      .from("goals")
+      .delete()
+      .eq("goal_id", goalId)
+      .eq("user_id", userId);
+    if (error) throw error;
   }
 }
 

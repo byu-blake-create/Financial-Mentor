@@ -6,7 +6,8 @@ import {
   budgets, 
   categories, 
   transactions, 
-  modules 
+  modules,
+  goals,
 } from './schema';
 
 export const errorSchemas = {
@@ -78,7 +79,16 @@ export const api = {
         200: z.array(z.custom<typeof transactions.$inferSelect>()),
       }
     }
-  }
+  },
+  goals: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/goals' as const,
+      responses: {
+        200: z.array(z.custom<typeof goals.$inferSelect>()),
+      },
+    },
+  },
 };
 
 export function buildUrl(path: string, params?: Record<string, string | number>): string {

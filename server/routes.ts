@@ -246,5 +246,87 @@ export async function registerRoutes(
     res.json(transactions);
   });
 
+  // Goals CRUD
+  app.get(api.goals.list.path, isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const list = await storage.getGoalsByUser(userId);
+      res.json(list);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ message: "Failed to load goals" });
+    }
+  });
+
+  app.post(api.goals.list.path, isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const { kind, presetId, title, description, categoryLabel, categoryId, targetAmount, savedAmount, unit, deadline } = req.body;
+    if (!title || typeof title !== "string" || !title.trim()) {
+      return res.status(400).json({ message: "Title is required" });
+    }
+    try {
+      const goal = await storage.createGoal(userId, {
+        userId,
+        kind: kind ?? "custom",
+        presetId: presetId ?? null,
+        title: title.trim(),
+        description: description ?? null,
+        categoryLabel: categoryLabel ?? null,
+        categoryId: categoryId ?? null,
+        targetAmount: targetAmount != null ? String(targetAmount) : "0",
+        savedAmount: savedAmount != null ? String(savedAmount) : "0",
+        unit: unit ?? "usd",
+        deadline: deadline ? new Date(String(deadline)) : null,
+      });
+      res.status(201).json(goal);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ message: "Failed to create goal" });
+    }
+  });
+
+  app.put("/api/goals/:id", isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const goalId = parseInt(String(req.params.id), 10);
+    if (Number.isNaN(goalId)) return res.status(400).json({ message: "Invalid goal ID" });
+
+    const updates: Record<string, unknown> = {};
+    const { title, description, categoryLabel, categoryId, targetAmount, savedAmount, unit, deadline } = req.body;
+    if (title !== undefined) updates.title = String(title).trim();
+    if (description !== undefined) updates.description = description;
+    if (categoryLabel !== undefined) updates.categoryLabel = categoryLabel;
+    if (categoryId !== undefined) updates.categoryId = categoryId;
+    if (targetAmount !== undefined) updates.targetAmount = String(targetAmount);
+    if (savedAmount !== undefined) updates.savedAmount = String(savedAmount);
+    if (unit !== undefined) updates.unit = unit;
+    if (deadline !== undefined) updates.deadline = deadline ? new Date(String(deadline)) : null;
+
+    try {
+      const goal = await storage.updateGoal(goalId, userId, updates as any);
+      res.json(goal);
+    } catch (e: any) {
+      if (e?.message === "Goal not found") return res.status(404).json({ message: "Goal not found" });
+      console.error(e);
+      res.status(500).json({ message: "Failed to update goal" });
+    }
+  });
+
+  app.delete("/api/goals/:id", isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const goalId = parseInt(String(req.params.id), 10);
+    if (Number.isNaN(goalId)) return res.status(400).json({ message: "Invalid goal ID" });
+    try {
+      await storage.deleteGoal(goalId, userId);
+      res.json({ message: "Goal deleted" });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ message: "Failed to delete goal" });
+    }
+  });
+
   return httpServer;
 }

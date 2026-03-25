@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@shared/routes";
+import type { Goal } from "@shared/schema";
 import type { GoalCategoryId, ProgressUnit } from "@/lib/financial-goals-data";
-import { getPresetById } from "@/lib/financial-goals-data";
-import { GOAL_CATEGORIES } from "@/lib/financial-goals-data";
-
-const STORAGE_VERSION = 1;
+import { getPresetById, GOAL_CATEGORIES } from "@/lib/financial-goals-data";
 
 export type ActiveGoal = {
   id: string;
+  dbId: number;
   kind: "preset" | "custom";
   presetId?: string;
   title: string;
@@ -20,111 +21,92 @@ export type ActiveGoal = {
   createdAt: string;
 };
 
-type PersistedPayload = {
-  v: number;
-  goals: ActiveGoal[];
-  streakDays: number;
-  lastProgressDate: string | null;
-};
-
-function storageKey(userId: number) {
-  return `prosper-financial-goals-v${STORAGE_VERSION}-${userId}`;
+function goalToActive(g: Goal): ActiveGoal {
+  return {
+    id: String(g.id),
+    dbId: g.id,
+    kind: (g.kind === "preset" ? "preset" : "custom") as "preset" | "custom",
+    presetId: g.presetId ?? undefined,
+    title: g.title,
+    description: g.description ?? "",
+    categoryLabel: g.categoryLabel ?? "Goal",
+    categoryId: (g.categoryId ?? undefined) as GoalCategoryId | undefined,
+    targetAmount: parseFloat(String(g.targetAmount)) || 0,
+    savedAmount: parseFloat(String(g.savedAmount)) || 0,
+    unit: (g.unit ?? "usd") as ProgressUnit,
+    deadline: g.deadline ? new Date(String(g.deadline)).toISOString() : null,
+    createdAt: g.createdAt ? new Date(String(g.createdAt)).toISOString() : new Date().toISOString(),
+  };
 }
 
-function loadFromStorage(userId: number): PersistedPayload {
-  if (typeof window === "undefined") {
-    return { v: STORAGE_VERSION, goals: [], streakDays: 0, lastProgressDate: null };
-  }
-  try {
-    const raw = localStorage.getItem(storageKey(userId));
-    if (!raw) {
-      return { v: STORAGE_VERSION, goals: [], streakDays: 0, lastProgressDate: null };
-    }
-    const parsed = JSON.parse(raw) as PersistedPayload;
-    if (!parsed || !Array.isArray(parsed.goals)) {
-      return { v: STORAGE_VERSION, goals: [], streakDays: 0, lastProgressDate: null };
-    }
-    return {
-      v: STORAGE_VERSION,
-      goals: parsed.goals,
-      streakDays: typeof parsed.streakDays === "number" ? parsed.streakDays : 0,
-      lastProgressDate:
-        typeof parsed.lastProgressDate === "string" || parsed.lastProgressDate === null
-          ? parsed.lastProgressDate
-          : null,
-    };
-  } catch {
-    return { v: STORAGE_VERSION, goals: [], streakDays: 0, lastProgressDate: null };
-  }
-}
-
-function todayYmd(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function yesterdayYmd(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
-
-function bumpStreak(prev: PersistedPayload): Pick<PersistedPayload, "streakDays" | "lastProgressDate"> {
-  const today = todayYmd();
-  if (prev.lastProgressDate === today) {
-    return { streakDays: prev.streakDays, lastProgressDate: prev.lastProgressDate };
-  }
-  if (prev.lastProgressDate === yesterdayYmd() || prev.lastProgressDate === null) {
-    const next =
-      prev.lastProgressDate === null ? 1 : prev.streakDays + 1;
-    return { streakDays: next, lastProgressDate: today };
-  }
-  return { streakDays: 1, lastProgressDate: today };
-}
+const GOALS_KEY = [api.goals.list.path];
 
 export function useFinancialGoals(userId: number | undefined) {
-  const [goals, setGoals] = useState<ActiveGoal[]>([]);
-  const [streakDays, setStreakDays] = useState(0);
-  const [lastProgressDate, setLastProgressDate] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const qc = useQueryClient();
 
-  useEffect(() => {
-    if (userId == null) return;
-    const data = loadFromStorage(userId);
-    setGoals(data.goals);
-    setStreakDays(data.streakDays);
-    setLastProgressDate(data.lastProgressDate);
-    setHydrated(true);
-  }, [userId]);
-
-  const persist = useCallback(
-    (next: ActiveGoal[], streak: number, last: string | null) => {
-      if (userId == null) return;
-      setGoals(next);
-      setStreakDays(streak);
-      setLastProgressDate(last);
-      const payload: PersistedPayload = {
-        v: STORAGE_VERSION,
-        goals: next,
-        streakDays: streak,
-        lastProgressDate: last,
-      };
-      localStorage.setItem(storageKey(userId), JSON.stringify(payload));
+  const { data: rawGoals, isLoading } = useQuery({
+    queryKey: GOALS_KEY,
+    queryFn: async () => {
+      const res = await fetch(api.goals.list.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch goals");
+      return (await res.json()) as Goal[];
     },
-    [userId],
+    enabled: userId != null,
+  });
+
+  const goals: ActiveGoal[] = useMemo(
+    () => (rawGoals ?? []).map(goalToActive),
+    [rawGoals],
   );
+
+  const createMutation = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = await fetch(api.goals.list.path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Failed to create goal");
+      return (await res.json()) as Goal;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: GOALS_KEY }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, ...body }: { id: number } & Record<string, unknown>) => {
+      const res = await fetch(`/api/goals/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Failed to update goal");
+      return (await res.json()) as Goal;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: GOALS_KEY }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/goals/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete goal");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: GOALS_KEY }),
+  });
 
   const addPresetGoal = useCallback(
     (presetId: string, targetAmount: number, deadline: string | null) => {
       const preset = getPresetById(presetId);
-      if (!preset || userId == null) return false;
-      const data = loadFromStorage(userId);
-      if (data.goals.some((g) => g.kind === "preset" && g.presetId === presetId)) {
+      if (!preset) return false;
+      if (goals.some((g) => g.kind === "preset" && g.presetId === presetId)) {
         return false;
       }
-
       const cat = GOAL_CATEGORIES.find((c) => c.id === preset.categoryId);
-      const goal: ActiveGoal = {
-        id: crypto.randomUUID(),
+      createMutation.mutate({
         kind: "preset",
         presetId: preset.id,
         title: preset.title,
@@ -135,12 +117,10 @@ export function useFinancialGoals(userId: number | undefined) {
         savedAmount: 0,
         unit: preset.unit,
         deadline,
-        createdAt: new Date().toISOString(),
-      };
-      persist([...data.goals, goal], data.streakDays, data.lastProgressDate);
+      });
       return true;
     },
-    [persist, userId],
+    [goals, createMutation],
   );
 
   const addCustomGoal = useCallback(
@@ -150,54 +130,43 @@ export function useFinancialGoals(userId: number | undefined) {
       deadline: string | null;
       categoryId?: GoalCategoryId;
     }) => {
-      if (userId == null) return;
-      const data = loadFromStorage(userId);
       const cat = input.categoryId
         ? GOAL_CATEGORIES.find((c) => c.id === input.categoryId)
         : undefined;
-      const goal: ActiveGoal = {
-        id: crypto.randomUUID(),
+      createMutation.mutate({
         kind: "custom",
         title: input.title.trim(),
         description: "Your custom goal—keep it visible and keep going.",
         categoryLabel: cat?.label ?? "Custom",
-        categoryId: input.categoryId,
+        categoryId: input.categoryId ?? null,
         targetAmount: input.targetAmount,
         savedAmount: 0,
         unit: "usd",
         deadline: input.deadline,
-        createdAt: new Date().toISOString(),
-      };
-      persist([...data.goals, goal], data.streakDays, data.lastProgressDate);
+      });
     },
-    [persist, userId],
+    [createMutation],
   );
 
   const updateSaved = useCallback(
     (goalId: string, savedAmount: number) => {
-      if (userId == null) return;
-      const prevPayload = loadFromStorage(userId);
-      const streakUpdate = bumpStreak(prevPayload);
-      const next = prevPayload.goals.map((g) =>
-        g.id === goalId ? { ...g, savedAmount: Math.max(0, savedAmount) } : g,
-      );
-      persist(next, streakUpdate.streakDays, streakUpdate.lastProgressDate);
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal) return;
+      updateMutation.mutate({ id: goal.dbId, savedAmount: Math.max(0, savedAmount) });
     },
-    [persist, userId],
+    [goals, updateMutation],
   );
 
   const removeGoal = useCallback(
     (goalId: string) => {
-      if (userId == null) return;
-      const data = loadFromStorage(userId);
-      persist(
-        data.goals.filter((g) => g.id !== goalId),
-        data.streakDays,
-        data.lastProgressDate,
-      );
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal) return;
+      deleteMutation.mutate(goal.dbId);
     },
-    [persist, userId],
+    [goals, deleteMutation],
   );
+
+  const streakDays = 0;
 
   const stats = useMemo(() => {
     const completed = goals.filter(
@@ -209,8 +178,8 @@ export function useFinancialGoals(userId: number | undefined) {
   return {
     goals,
     streakDays,
-    lastProgressDate,
-    hydrated,
+    lastProgressDate: null as string | null,
+    hydrated: !isLoading,
     addPresetGoal,
     addCustomGoal,
     updateSaved,
