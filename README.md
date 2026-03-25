@@ -155,6 +155,17 @@ http://localhost:4000
 
 *(Replace `4000` with the port you set in `.env`.)*
 
+## Deployment Update
+
+Financial Mentor is currently hosted on **Render** as a web service. We moved deployment to Render because this project uses a full **Express + Vite** setup rather than a static frontend only.
+
+### Render Configuration
+
+- **Build Command:** `npm install && npm run build`
+- **Start Command:** `npm start`
+- **Environment Variables:** configured in the Render dashboard
+- **Port:** provided automatically by Render through the `PORT` environment variable
+
 ## Verifying the Vertical Slice
 
 The vertical slice demonstrates the **budget management** feature end-to-end — from the UI through the API to the database and back.
