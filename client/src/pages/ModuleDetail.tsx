@@ -3,6 +3,7 @@ import { useModule } from "@/hooks/use-modules";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, PlayCircle } from "lucide-react";
 import { Link } from "wouter";
+import ModuleFeedbackForm from "@/components/ModuleFeedbackForm";
 
 // Convert YouTube URL to embed URL
 function getYouTubeEmbedUrl(url: string | null): string | null {
@@ -102,6 +103,8 @@ export default function ModuleDetail() {
             </div>
           )}
         </div>
+
+        <ModuleFeedbackForm moduleId={module.id} />
       </div>
     </div>
   );

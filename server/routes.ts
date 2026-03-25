@@ -246,5 +246,91 @@ export async function registerRoutes(
     res.json(transactions);
   });
 
+  // Get module feedback for current user
+  app.get(api.feedback.get.path, isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const moduleId = parseInt(String(req.params.moduleId), 10);
+    if (isNaN(moduleId)) {
+      return res.status(400).json({ message: "Invalid module ID" });
+    }
+
+    const feedback = await storage.getModuleFeedback(userId, moduleId);
+    res.json(feedback || null);
+  });
+
+  // Create or update module feedback
+  app.post(api.feedback.create.path, isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const moduleId = parseInt(String(req.params.moduleId), 10);
+    if (isNaN(moduleId)) {
+      return res.status(400).json({ message: "Invalid module ID" });
+    }
+
+    const { rating, comment } = req.body;
+
+    if (rating === undefined || rating < 1 || rating > 10) {
+      return res.status(400).json({ message: "Rating must be between 1 and 10" });
+    }
+
+    // Check if user already has feedback for this module
+    const existingFeedback = await storage.getModuleFeedback(userId, moduleId);
+
+    if (existingFeedback) {
+      // Update existing feedback
+      const updatedFeedback = await storage.updateModuleFeedback(existingFeedback.id, {
+        rating,
+        comment: comment || null,
+      });
+      return res.status(200).json(updatedFeedback);
+    }
+
+    // Create new feedback
+    const newFeedback = await storage.createModuleFeedback({
+      userId,
+      moduleId,
+      rating,
+      comment: comment || null,
+    });
+
+    res.status(201).json(newFeedback);
+  });
+
+  // Update module feedback
+  app.put(api.feedback.update.path, isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const feedbackId = parseInt(String(req.params.feedbackId), 10);
+    if (isNaN(feedbackId)) {
+      return res.status(400).json({ message: "Invalid feedback ID" });
+    }
+
+    const { rating, comment } = req.body;
+
+    if (rating !== undefined && (rating < 1 || rating > 10)) {
+      return res.status(400).json({ message: "Rating must be between 1 and 10" });
+    }
+
+    const updates: any = {};
+    if (rating !== undefined) updates.rating = rating;
+    if (comment !== undefined) updates.comment = comment;
+
+    const updatedFeedback = await storage.updateModuleFeedback(feedbackId, updates);
+    res.json(updatedFeedback);
+  });
+
   return httpServer;
 }

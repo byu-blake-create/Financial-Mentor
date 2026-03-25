@@ -71,6 +71,20 @@ CREATE TABLE IF NOT EXISTS user_progress (
     CONSTRAINT unique_user_module UNIQUE (user_id, module_id)
 );
 
+-- Module Feedback Table
+CREATE TABLE IF NOT EXISTS module_feedback (
+    feedback_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    module_id INTEGER NOT NULL,
+    rating INTEGER NOT NULL,
+    comment TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_feedback_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    CONSTRAINT fk_feedback_module FOREIGN KEY (module_id) REFERENCES modules(module_id) ON DELETE CASCADE,
+    CONSTRAINT unique_user_module_feedback UNIQUE (user_id, module_id)
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_budget_user_id ON budget(user_id);
 CREATE INDEX IF NOT EXISTS idx_budget_categories_budget_id ON budget_categories(budget_id);
@@ -79,6 +93,8 @@ CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_user_progress_user_id ON user_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_progress_module_id ON user_progress(module_id);
+CREATE INDEX IF NOT EXISTS idx_module_feedback_user_id ON module_feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_module_feedback_module_id ON module_feedback(module_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 -- Create a function to update the updated_at timestamp
@@ -105,4 +121,8 @@ CREATE TRIGGER update_modules_updated_at BEFORE UPDATE ON modules
 
 DROP TRIGGER IF EXISTS update_user_progress_updated_at ON user_progress;
 CREATE TRIGGER update_user_progress_updated_at BEFORE UPDATE ON user_progress
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_module_feedback_updated_at ON module_feedback;
+CREATE TRIGGER update_module_feedback_updated_at BEFORE UPDATE ON module_feedback
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
