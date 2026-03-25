@@ -20,13 +20,14 @@ Financial Mentor is a web app that helps college students (18–25) build basic 
 10. When an authenticated user navigates to the Modules page, the system shall display all available learning modules with their titles and descriptions.
 11. If the `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` environment variable is missing, then the system shall refuse to start and display an error.
 12. The system shall be responsive and usable on both desktop and mobile screen sizes.
+13. When a user sends a message in the AI chat, the system shall stream a financial-advice response from the OpenAI API.
+14. While the AI chat service or OpenAI API is unavailable, the system shall display a clear message and prevent attempted interactions.
 
 ### Not Complete
 
 1. When a user selects a learning module, the system shall track their progress and mark the module as completed.
 2. When an authenticated user navigates to the Dashboard, the system shall display spending trends and personalized insights based on their transaction history.
-3. When a user sends a message in the AI chat, the system shall stream a financial-advice response from the OpenAI API.
-4. While the AI chat service or OpenAI API is unavailable, the system shall display a clear message and prevent attempted interactions.
+
 5. When a user creates a new transaction, the system shall automatically update the budget summary to reflect the new spending.
 6. When a user's spending in a category approaches or exceeds the budgeted amount, the system shall display a warning notification.
 
