@@ -427,6 +427,9 @@ export class DatabaseStorage implements IStorage {
       .delete()
       .eq("goal_id", goalId)
       .eq("user_id", userId);
+    if (error) throw error;
+  }
+
   async getUserModuleProgressMap(userId: number): Promise<Record<number, { watched: boolean; watchLater: boolean }>> {
     const { data, error } = await supabase
       .from("user_progress")
