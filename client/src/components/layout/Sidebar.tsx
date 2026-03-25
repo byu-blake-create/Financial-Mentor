@@ -84,6 +84,14 @@ export function Sidebar() {
               {user?.email || 'user@example.com'}
             </p>
           </div>
+          <Link
+            href="/edit-profile"
+            aria-label="Edit profile"
+            title="Edit profile"
+            className="rounded-lg p-2 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+          >
+            <UserCircle className="h-5 w-5" />
+          </Link>
           <button 
             onClick={() => logout()}
             className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
