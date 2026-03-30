@@ -1,23 +1,24 @@
 import { useDashboardData } from "@/hooks/use-dashboard";
+import { useFinancialGoals } from "@/hooks/use-financial-goals";
 import { StatCard } from "@/components/ui/StatCard";
 import { ModuleCard } from "@/components/ui/ModuleCard";
 import { 
-  CreditCard, 
   TrendingUp, 
   AlertCircle, 
   ArrowRight,
-  Wallet,
-  ShoppingBag
+  Target
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { Progress } from "@/components/ui/progress";
+import { formatGoalAmount } from "@/lib/financial-goals-data";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { data, isLoading } = useDashboardData();
+  const { goals, hydrated: goalsHydrated } = useFinancialGoals(user?.id);
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -203,45 +204,75 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Bottom Section: Recent Transactions */}
+      {/* Bottom Section: Goals preview */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold font-display">Recent Transactions</h2>
-          <Link href="/transactions" className="text-sm font-medium text-primary hover:underline">View All</Link>
+          <h2 className="text-xl font-bold font-display flex items-center gap-2">
+            <Target className="h-5 w-5 text-primary" />
+            Goals preview
+          </h2>
+          <Link href="/goals" className="text-sm font-medium text-primary hover:underline">
+            View All
+          </Link>
         </div>
         
         <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-          {data.recentTransactions.map((tx, index) => (
-            <div 
-              key={tx.id} 
-              className={`flex items-center justify-between p-4 hover:bg-muted/30 transition-colors ${
-                index !== data.recentTransactions.length - 1 ? 'border-b' : ''
-              }`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                  {tx.description.toLowerCase().includes('shopping') ? (
-                    <ShoppingBag className="w-5 h-5" />
-                  ) : tx.description.toLowerCase().includes('transfer') ? (
-                    <Wallet className="w-5 h-5" />
-                  ) : (
-                    <CreditCard className="w-5 h-5" />
-                  )}
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground">{tx.description}</p>
-                  <p className="text-xs text-muted-foreground">{format(new Date(tx.date), 'MMM d, yyyy')}</p>
-                </div>
+          {!goalsHydrated ? (
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-64" />
+                <Skeleton className="h-4 w-48" />
               </div>
-              <span className="font-mono font-medium text-foreground">
-                -${parseFloat(tx.amount).toFixed(2)}
-              </span>
+              <Skeleton className="h-3 w-full rounded-full" />
+              <div className="space-y-2 pt-2">
+                <Skeleton className="h-5 w-56" />
+                <Skeleton className="h-4 w-44" />
+              </div>
+              <Skeleton className="h-3 w-full rounded-full" />
             </div>
-          ))}
-          
-          {data.recentTransactions.length === 0 && (
-            <div className="p-8 text-center text-muted-foreground">
-              No recent transactions found.
+          ) : goals.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground space-y-3">
+              <p className="font-medium text-foreground">No goals yet.</p>
+              <p className="text-sm">
+                Add a goal to keep your priorities front and center.
+              </p>
+              <Link href="/goals" className="inline-flex text-sm font-medium text-primary hover:underline">
+                Create your first goal
+              </Link>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {goals.slice(0, 3).map((g) => {
+                const pct =
+                  g.targetAmount > 0
+                    ? Math.min(100, Math.round((g.savedAmount / g.targetAmount) * 100))
+                    : 0;
+
+                return (
+                  <div key={g.id} className="p-4 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">{g.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                          {formatGoalAmount(g.savedAmount, g.unit)} / {formatGoalAmount(g.targetAmount, g.unit)}
+                        </p>
+                      </div>
+                      <span className="text-xs font-semibold text-muted-foreground tabular-nums shrink-0">
+                        {pct}%
+                      </span>
+                    </div>
+                    <div className="mt-3">
+                      <Progress value={pct} className="h-2" />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {goals.length > 3 && (
+                <div className="p-4 text-sm text-muted-foreground">
+                  +{goals.length - 3} more goal{goals.length - 3 === 1 ? "" : "s"}
+                </div>
+              )}
             </div>
           )}
         </div>

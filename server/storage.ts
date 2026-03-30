@@ -200,6 +200,7 @@ function goalFromRow(row: GoalRow): Goal {
 export interface IStorage extends IAuthStorage, IChatStorage {
   // Budget
   getUserBudget(userId: number): Promise<Budget | undefined>;
+  ensureUserBudget(userId: number): Promise<Budget>;
   createBudget(budget: InsertBudget): Promise<Budget>;
   updateBudget(budgetId: number, updates: Partial<InsertBudget>): Promise<Budget>;
   
@@ -257,6 +258,18 @@ export class DatabaseStorage implements IStorage {
       .maybeSingle();
     if (error) throw error;
     return data ? budgetFromRow(data as BudgetRow) : undefined;
+  }
+
+  async ensureUserBudget(userId: number): Promise<Budget> {
+    const existing = await this.getUserBudget(userId);
+    if (existing) return existing;
+    // Create a minimal default budget so the Budget page has something to load.
+    return await this.createBudget({
+      userId,
+      monthlyLimit: "0",
+      weeklyLimit: "0",
+      date: new Date(),
+    } as InsertBudget);
   }
 
   async createBudget(insertBudget: InsertBudget): Promise<Budget> {
