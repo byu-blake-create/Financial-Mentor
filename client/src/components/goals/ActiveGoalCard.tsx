@@ -1,15 +1,13 @@
 import { useMemo } from "react";
-import { motion } from "framer-motion";
 import { formatDistanceToNowStrict, isPast } from "date-fns";
 import type { ActiveGoal } from "@/hooks/use-financial-goals";
-import { motivationalLine, formatGoalAmount } from "@/lib/financial-goals-data";
+import { formatGoalAmount } from "@/lib/financial-goals-data";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Sparkles, Calendar, Pencil } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Trash2, Calendar, Pencil } from "lucide-react";
 
 type ActiveGoalCardProps = {
   goal: ActiveGoal;
@@ -32,22 +30,10 @@ export function ActiveGoalCard({ goal, onSavedChange, onEdit, onRemove }: Active
     return `${formatDistanceToNowStrict(d, { addSuffix: true })}`;
   }, [goal.deadline]);
 
-  const line = motivationalLine(pct);
   const isComplete = pct >= 100;
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-    >
-      <Card
-        className={cn(
-          "overflow-hidden border-2 p-4 md:p-5 shadow-sm",
-          isComplete ? "border-emerald-500/35 bg-gradient-to-br from-emerald-500/5 to-transparent" : "border-border/80",
-        )}
-      >
+    <Card className="overflow-hidden border p-4 md:p-5 shadow-sm">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div className="space-y-1 min-w-0">
@@ -56,14 +42,15 @@ export function ActiveGoalCard({ goal, onSavedChange, onEdit, onRemove }: Active
                   {goal.categoryLabel}
                 </Badge>
                 {isComplete && (
-                  <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white gap-1">
-                    <Sparkles className="h-3 w-3" />
-                    Done
+                  <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white">
+                    Complete
                   </Badge>
                 )}
               </div>
               <h3 className="text-lg font-bold font-display leading-tight">{goal.title}</h3>
-              <p className="text-sm text-muted-foreground">{goal.description}</p>
+              {goal.description ? (
+                <p className="text-sm text-muted-foreground">{goal.description}</p>
+              ) : null}
             </div>
             <div className="flex items-center gap-1 self-end sm:self-start">
               <Button
@@ -96,7 +83,6 @@ export function ActiveGoalCard({ goal, onSavedChange, onEdit, onRemove }: Active
               </span>
             </div>
             <Progress value={pct} className="h-3" />
-            <p className="text-sm font-medium text-primary">{line}</p>
           </div>
 
           {deadlineLabel && (
@@ -139,6 +125,5 @@ export function ActiveGoalCard({ goal, onSavedChange, onEdit, onRemove }: Active
           </div>
         </div>
       </Card>
-    </motion.div>
   );
 }

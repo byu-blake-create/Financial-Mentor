@@ -29,23 +29,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Flame, Target, Sparkles, Filter } from "lucide-react";
+import { Target, Filter } from "lucide-react";
 export default function FinancialGoals() {
   const { user } = useAuth();
   const userId = user?.id;
 
   const {
     goals,
-    streakDays,
     hydrated,
     addPresetGoal,
     addCustomGoal,
     updateSaved,
     updateGoalDetails,
     removeGoal,
-    stats,
   } = useFinancialGoals(userId);
 
   const [filter, setFilter] = useState<"all" | GoalCategoryId>("all");
@@ -211,27 +208,14 @@ export default function FinancialGoals() {
   }
 
   return (
-    <div className="space-y-10 max-w-5xl mx-auto pb-8 animate-in fade-in duration-500">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant="secondary"
-            className="gap-1.5 pl-2 pr-2.5 py-1 font-semibold bg-orange-500/15 text-orange-900 dark:text-orange-100 border-orange-500/20"
-          >
-            <Flame className="h-3.5 w-3.5" />
-            {streakDays > 0 ? `${streakDays}-day streak` : "Start your streak"}
-          </Badge>
-          <Badge variant="outline" className="gap-1 font-medium">
-            <Sparkles className="h-3.5 w-3.5" />
-            {stats.completedCount} completed
-          </Badge>
-        </div>
+    <div className="space-y-8 max-w-5xl mx-auto pb-8">
+      <header className="space-y-2">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold font-display tracking-tight">
-            Financial goals
+          <h1 className="text-3xl font-bold font-display tracking-tight">
+            Goals
           </h1>
-          <p className="text-muted-foreground mt-1 max-w-2xl">
-            Pick a path, name your target, and watch the bar move. Small wins beat perfect plans.
+          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+            Build a goal, keep progress visible, and adjust anytime.
           </p>
         </div>
       </header>
@@ -241,10 +225,10 @@ export default function FinancialGoals() {
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <h2 className="text-xl font-bold font-display flex items-center gap-2">
-              <Target className="h-5 w-5 text-primary" />
+              <Target className="h-4 w-4 text-primary" />
               Your active goals
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground mt-1">
               {goals.length === 0
                 ? "Nothing here yet — add a goal below."
                 : `${goals.length} goal${goals.length === 1 ? "" : "s"} in motion`}
@@ -259,11 +243,11 @@ export default function FinancialGoals() {
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border-2 border-dashed border-primary/25 bg-primary/5 p-8 text-center"
+            className="rounded-xl border border-dashed p-8 text-center"
           >
             <p className="font-semibold text-foreground">Ready when you are</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-              Choose a starter goal from the library or create your own. Progress saves on this device.
+              Choose a starter goal from the library or create your own.
             </p>
           </motion.div>
         ) : (
@@ -289,9 +273,9 @@ export default function FinancialGoals() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-bold font-display">Goal library</h2>
-            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-              <Filter className="h-4 w-4" />
-              Filter by category — tap a card to add
+            <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
+              <Filter className="h-3.5 w-3.5" />
+              Filter by category and add what matters most right now.
             </p>
           </div>
         </div>
