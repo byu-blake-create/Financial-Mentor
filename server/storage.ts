@@ -3,12 +3,14 @@ import {
   type Category,
   type Transaction,
   type Module,
+  type UserProgress,
   type ModuleFeedback,
   type Goal,
   type InsertBudget,
   type InsertCategory,
   type InsertTransaction,
   type InsertModule,
+  type InsertUserProgress,
   type InsertModuleFeedback,
   type InsertGoal,
 } from "@shared/schema";
@@ -221,6 +223,45 @@ function goalFromRow(row: GoalRow): Goal {
   };
 }
 
+type UserProgressRow = {
+  progress_id: number;
+  user_id: number;
+  module_id: number;
+  status: boolean;
+  watch_later: boolean;
+  completed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function userProgressFromRow(row: UserProgressRow): UserProgress {
+  return {
+    id: row.progress_id,
+    userId: row.user_id,
+    moduleId: row.module_id,
+    status: row.status,
+    watchLater: row.watch_later,
+    completedAt: toDate(row.completed_at),
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  };
+}
+
+function userProgressToRow(insertProgress: Partial<InsertUserProgress>) {
+  return {
+    user_id: insertProgress.userId,
+    module_id: insertProgress.moduleId,
+    status: insertProgress.status,
+    watch_later: insertProgress.watchLater,
+    completed_at: insertProgress.completedAt
+      ? (insertProgress.completedAt as any).toISOString?.() ?? insertProgress.completedAt
+      : insertProgress.completedAt === null
+        ? null
+        : undefined,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 export interface IStorage extends IAuthStorage, IChatStorage {
   // Budget
   getUserBudget(userId: number): Promise<Budget | undefined>;
@@ -250,6 +291,8 @@ export interface IStorage extends IAuthStorage, IChatStorage {
   updateGoal(goalId: number, userId: number, updates: Partial<InsertGoal>): Promise<Goal>;
   deleteGoal(goalId: number, userId: number): Promise<void>;
   getUserModuleProgressMap(userId: number): Promise<Record<number, { watched: boolean; watchLater: boolean }>>;
+  getUserModuleProgress(userId: number): Promise<UserProgress[]>;
+  getUserModuleProgressEntry(userId: number, moduleId: number): Promise<UserProgress | undefined>;
   upsertUserModuleProgress(
     userId: number,
     moduleId: number,
@@ -484,21 +527,36 @@ export class DatabaseStorage implements IStorage {
     if (error) throw error;
   }
 
-  async getUserModuleProgressMap(userId: number): Promise<Record<number, { watched: boolean; watchLater: boolean }>> {
+  async getUserModuleProgress(userId: number): Promise<UserProgress[]> {
     const { data, error } = await supabase
       .from("user_progress")
-      .select("module_id,status,watch_later")
-      .eq("user_id", userId);
+      .select("*")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false });
     if (error) throw error;
-    const map: Record<number, { watched: boolean; watchLater: boolean }> = {};
-    for (const row of data ?? []) {
-      const r = row as { module_id: number; status: boolean | null; watch_later?: boolean | null };
-      map[r.module_id] = {
-        watched: !!r.status,
-        watchLater: !!r.watch_later,
+    return (data ?? []).map((row) => userProgressFromRow(row as UserProgressRow));
+  }
+
+  async getUserModuleProgressEntry(userId: number, moduleId: number): Promise<UserProgress | undefined> {
+    const { data, error } = await supabase
+      .from("user_progress")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("module_id", moduleId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? userProgressFromRow(data as UserProgressRow) : undefined;
+  }
+
+  async getUserModuleProgressMap(userId: number): Promise<Record<number, { watched: boolean; watchLater: boolean }>> {
+    const progress = await this.getUserModuleProgress(userId);
+    return progress.reduce<Record<number, { watched: boolean; watchLater: boolean }>>((map, entry) => {
+      map[entry.moduleId] = {
+        watched: entry.status,
+        watchLater: entry.watchLater,
       };
-    }
-    return map;
+      return map;
+    }, {});
   }
 
   async upsertUserModuleProgress(
@@ -506,40 +564,35 @@ export class DatabaseStorage implements IStorage {
     moduleId: number,
     patch: { watched?: boolean; watchLater?: boolean }
   ): Promise<void> {
-    const { data: existing, error: selErr } = await supabase
-      .from("user_progress")
-      .select("status,watch_later")
-      .eq("user_id", userId)
-      .eq("module_id", moduleId)
-      .maybeSingle();
-    if (selErr) throw selErr;
-
-    const ex = existing as { status: boolean | null; watch_later?: boolean | null } | null;
-    const watched = patch.watched !== undefined ? patch.watched : !!ex?.status;
-    const watchLater = patch.watchLater !== undefined ? patch.watchLater : !!ex?.watch_later;
+    const existing = await this.getUserModuleProgressEntry(userId, moduleId);
+    const watched = patch.watched ?? existing?.status ?? false;
+    const watchLater = patch.watchLater ?? existing?.watchLater ?? false;
 
     if (!watched && !watchLater) {
-      const { error: delErr } = await supabase
+      const { error: deleteError } = await supabase
         .from("user_progress")
         .delete()
         .eq("user_id", userId)
         .eq("module_id", moduleId);
-      if (delErr) throw delErr;
+      if (deleteError) throw deleteError;
       return;
     }
 
-    const row = {
-      user_id: userId,
-      module_id: moduleId,
-      status: watched,
-      watch_later: watchLater,
-      completed_at: watched ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabase.from("user_progress").upsert(row, {
-      onConflict: "user_id,module_id",
-    });
+    const completedAt = watched ? existing?.completedAt ?? new Date() : null;
+    const { error } = await supabase
+      .from("user_progress")
+      .upsert(
+        userProgressToRow({
+          userId,
+          moduleId,
+          status: watched,
+          watchLater,
+          completedAt,
+        }),
+        {
+          onConflict: "user_id,module_id",
+        }
+      );
     if (error) throw error;
   }
 }

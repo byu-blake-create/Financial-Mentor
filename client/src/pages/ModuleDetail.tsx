@@ -1,3 +1,6 @@
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useModule, useUpdateModuleProgress } from "@/hooks/use-modules";
 import { useRoute } from "wouter";
 import { useState } from "react";
 import { useModule, useSubmitModuleFeedback, useUpdateModuleProgress } from "@/hooks/use-modules";
@@ -9,29 +12,28 @@ import { ArrowLeft, Bookmark, Check, PlayCircle } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { ArrowLeft, Bookmark, Check, PlayCircle } from "lucide-react";
+import { Link, useRoute } from "wouter";
 
-// Convert YouTube URL to embed URL
 function getYouTubeEmbedUrl(url: string | null): string | null {
   if (!url) return null;
-  
-  // Handle different YouTube URL formats
+
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/,
     /youtube\.com\/embed\/([a-zA-Z0-9_-]+)/,
   ];
-  
+
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match && match[1]) {
       return `https://www.youtube.com/embed/${match[1]}`;
     }
   }
-  
-  // If it's already an embed URL, return as is
-  if (url.includes('youtube.com/embed/')) {
+
+  if (url.includes("youtube.com/embed/")) {
     return url;
   }
-  
+
   return null;
 }
 
@@ -64,7 +66,6 @@ export default function ModuleDetail() {
   }
 
   const embedUrl = getYouTubeEmbedUrl(module.videoUrl);
-
   const progressPending =
     updateProgress.isPending && updateProgress.variables?.moduleId === module.id;
 
@@ -123,7 +124,12 @@ export default function ModuleDetail() {
               type="button"
               variant={module.watched ? "secondary" : "default"}
               disabled={progressPending}
-              onClick={() => saveProgress({ watched: !module.watched })}
+              onClick={() =>
+                saveProgress({
+                  watched: !module.watched,
+                  watchLater: module.watched ? module.watchLater : false,
+                })
+              }
               className="gap-2"
             >
               <Check className="h-4 w-4" />

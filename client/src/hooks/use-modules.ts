@@ -1,24 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl } from "@shared/routes";
+import {
+  api,
+  buildUrl,
+  type ModuleProgressUpdateRequest,
+  type ModuleResponse,
+  type ModulesListResponse,
+} from "@shared/routes";
 
-export interface Module {
-  id: number;
-  title: string;
-  description: string;
-  videoUrl: string | null;
-  imageUrl: string | null;
-  category: string;
-  watched?: boolean;
-  watchLater?: boolean;
-}
-
-export interface ModulesListResponse {
-  suggested: Module[];
-  popular: Module[];
-  all: Module[];
-  watchLater: Module[];
-  watched: Module[];
-}
+export type Module = ModuleResponse;
 
 export interface ModuleFeedbackInput {
   moduleId: number;
@@ -62,12 +51,13 @@ export function useModule(id: number) {
 
 export function useUpdateModuleProgress() {
   const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: async (input: { moduleId: number; watched?: boolean; watchLater?: boolean }) => {
-      const url = `/api/modules/${input.moduleId}/progress`;
-      const { moduleId: _id, ...body } = input;
+    mutationFn: async (input: { moduleId: number } & ModuleProgressUpdateRequest) => {
+      const url = buildUrl(api.modules.progress.path, { id: input.moduleId });
+      const { moduleId: _moduleId, ...body } = input;
       const res = await fetch(url, {
-        method: "PATCH",
+        method: api.modules.progress.method,
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -76,11 +66,13 @@ export function useUpdateModuleProgress() {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { message?: string }).message || "Failed to update progress");
       }
-      return (await res.json()) as { moduleId: number; watched: boolean; watchLater: boolean };
+      return (await res.json()) as Module;
     },
-    onSuccess: () => {
+    onSuccess: (updatedModule, variables) => {
+      queryClient.setQueryData([api.modules.get.path, variables.moduleId], updatedModule);
       queryClient.invalidateQueries({ queryKey: [api.modules.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.modules.get.path] });
+      queryClient.invalidateQueries({ queryKey: [api.dashboard.get.path] });
     },
   });
 }

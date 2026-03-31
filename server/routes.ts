@@ -1,8 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import type { InsertCategory, Module, UserProgress } from "@shared/schema";
 import { insertModuleFeedbackSchema, type InsertCategory } from "@shared/schema";
 import { storage } from "./storage";
-import { api } from "@shared/routes";
+import { api, moduleProgressUpdateSchema } from "@shared/routes";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { registerChatRoutes } from "./replit_integrations/chat";
 
@@ -40,24 +41,38 @@ function toClientBudget(budget: any, categories: any[]) {
   };
 }
 
-function toClientModule(module: any, category: string) {
+function toClientModule(module: Module, category: string, progress?: UserProgress) {
   return {
-    ...module,
+    id: module.id,
+    title: module.title,
+    description: module.description ?? "",
+    videoUrl: module.videoUrl,
+    imageUrl: module.imageUrl,
     category,
+    watched: progress?.status ?? false,
+    watchLater: progress?.watchLater ?? false,
+    completedAt: progress?.completedAt ? progress.completedAt.toISOString() : null,
+    createdAt: module.createdAt ? module.createdAt.toISOString() : null,
+    updatedAt: module.updatedAt ? module.updatedAt.toISOString() : null,
   };
 }
 
-function enrichModuleWithProgress(
-  module: any,
-  category: string,
-  progress: Record<number, { watched: boolean; watchLater: boolean }>
-) {
-  const p = progress[module.id] ?? { watched: false, watchLater: false };
-  return {
-    ...toClientModule(module, category),
-    watched: p.watched,
-    watchLater: p.watchLater,
-  };
+function buildProgressMap(progressRows: UserProgress[]) {
+  return new Map(progressRows.map((entry) => [entry.moduleId, entry]));
+}
+
+function getUnwatchedModules(allModules: Module[], progressMap: Map<number, UserProgress>) {
+  const watchlist = allModules.filter((module) => {
+    const progress = progressMap.get(module.id);
+    return Boolean(progress?.watchLater) && !Boolean(progress?.status);
+  });
+
+  const remaining = allModules.filter((module) => {
+    const progress = progressMap.get(module.id);
+    return !progress?.status && !progress?.watchLater;
+  });
+
+  return [...watchlist, ...remaining];
 }
 
 export async function registerRoutes(
@@ -136,15 +151,30 @@ export async function registerRoutes(
 
     const recentTransactions = await storage.getTransactions(userId);
     const allModules = await storage.getModules();
-    const recentModules = allModules.slice(0, 4).map((m) => toClientModule(m, "Recent"));
-    const recommendedModules = allModules.slice(4, 8).map((m) => toClientModule(m, "Recommended"));
+    const progressMap = buildProgressMap(await storage.getUserModuleProgress(userId));
+    const upNextModules = getUnwatchedModules(allModules, progressMap)
+      .slice(0, 4)
+      .map((module) =>
+        toClientModule(
+          module,
+          progressMap.get(module.id)?.watchLater ? "Watchlist" : "Up Next",
+          progressMap.get(module.id)
+        )
+      );
+    const watchlistModules = allModules
+      .filter((module) => {
+        const progress = progressMap.get(module.id);
+        return Boolean(progress?.watchLater) && !Boolean(progress?.status);
+      })
+      .slice(0, 4)
+      .map((module) => toClientModule(module, "Watchlist", progressMap.get(module.id)));
 
     res.json({
       budget: budgetWithCategories,
       recentTransactions: recentTransactions.slice(0, 5), // Limit to 5
       modules: {
-        recent: recentModules,
-        recommended: recommendedModules,
+        upNext: upNextModules,
+        watchlist: watchlistModules,
       }
     });
   });
@@ -156,17 +186,18 @@ export async function registerRoutes(
     }
 
     const allModules = await storage.getModules();
-    const progressMap = await storage.getUserModuleProgressMap(userId);
-
-    const all = allModules.map((m, idx) =>
-      enrichModuleWithProgress(m, idx % 2 === 0 ? "Suggested" : "Popular", progressMap)
+    const progressMap = buildProgressMap(await storage.getUserModuleProgress(userId));
+    const all = allModules.map((module, idx) =>
+      toClientModule(module, idx % 2 === 0 ? "Suggested" : "Popular", progressMap.get(module.id))
     );
-
-    const suggested = allModules.slice(4, 8).map((m) => enrichModuleWithProgress(m, "Suggested", progressMap));
-    const popular = allModules.slice(8, 12).map((m) => enrichModuleWithProgress(m, "Popular", progressMap));
-
-    const watchLater = all.filter((m) => m.watchLater);
-    const watched = all.filter((m) => m.watched);
+    const suggested = allModules
+      .slice(4, 8)
+      .map((module) => toClientModule(module, "Suggested", progressMap.get(module.id)));
+    const popular = allModules
+      .slice(8, 12)
+      .map((module) => toClientModule(module, "Popular", progressMap.get(module.id)));
+    const watchLater = all.filter((module) => module.watchLater && !module.watched);
+    const watched = all.filter((module) => module.watched);
 
     res.json({
       suggested,
@@ -182,7 +213,6 @@ export async function registerRoutes(
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-
     const moduleId = parseInt(String(req.params.id), 10);
     if (isNaN(moduleId)) {
       return res.status(400).json({ message: "Invalid module ID" });
@@ -193,11 +223,11 @@ export async function registerRoutes(
       return res.status(404).json({ message: "Module not found" });
     }
 
-    const progressMap = await storage.getUserModuleProgressMap(userId);
-    res.json(enrichModuleWithProgress(module, "Suggested", progressMap));
+    const progress = await storage.getUserModuleProgressEntry(userId, moduleId);
+    res.json(toClientModule(module, "Module", progress));
   });
 
-  app.patch("/api/modules/:id/progress", isAuthenticated, async (req, res) => {
+  app.patch(api.modules.progress.path, isAuthenticated, async (req, res) => {
     const userId = getCurrentUserId(req);
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -208,20 +238,22 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid module ID" });
     }
 
-    const mod = await storage.getModule(moduleId);
-    if (!mod) {
+    const parsedBody = moduleProgressUpdateSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return res.status(400).json({
+        message: parsedBody.error.issues[0]?.message ?? "Invalid progress update",
+        field: parsedBody.error.issues[0]?.path[0],
+      });
+    }
+
+    const module = await storage.getModule(moduleId);
+    if (!module) {
       return res.status(404).json({ message: "Module not found" });
     }
 
-    const { watched, watchLater } = req.body as { watched?: boolean; watchLater?: boolean };
-    if (watched === undefined && watchLater === undefined) {
-      return res.status(400).json({ message: "Provide watched and/or watchLater" });
-    }
-
-    await storage.upsertUserModuleProgress(userId, moduleId, { watched, watchLater });
-    const progressMap = await storage.getUserModuleProgressMap(userId);
-    const p = progressMap[moduleId] ?? { watched: false, watchLater: false };
-    res.json({ moduleId, watched: p.watched, watchLater: p.watchLater });
+    await storage.upsertUserModuleProgress(userId, moduleId, parsedBody.data);
+    const progress = await storage.getUserModuleProgressEntry(userId, moduleId);
+    res.json(toClientModule(module, "Module", progress));
   });
 
   app.post(api.modules.feedback.path, isAuthenticated, async (req, res) => {
