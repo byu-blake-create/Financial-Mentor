@@ -188,11 +188,7 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const budget = await storage.getUserBudget(userId);
-
-    if (!budget) {
-      return res.status(404).json({ message: "Budget not found" });
-    }
+    const budget = await storage.ensureUserBudget(userId);
 
     const categories = await storage.getCategories(budget.id);
     res.json(toClientBudget(budget, categories));
