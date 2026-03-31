@@ -212,6 +212,7 @@ export class DatabaseStorage implements IStorage {
   getUser = authStorage.getUser.bind(authStorage);
   getUserByEmail = authStorage.getUserByEmail.bind(authStorage);
   upsertUser = authStorage.upsertUser.bind(authStorage);
+  updateUser = authStorage.updateUser.bind(authStorage);
   
   // Inherit Chat Storage methods
   getConversation = chatStorage.getConversation.bind(chatStorage);

@@ -7,6 +7,7 @@ export interface IAuthStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(userData: UpsertUser): Promise<User>;
+  updateUser(id: number, userData: Partial<UpsertUser>): Promise<User>;
 }
 
 type UserRow = {
@@ -47,6 +48,19 @@ function userToRow(userData: Partial<UpsertUser>) {
   };
 }
 
+function userUpdateToRow(userData: Partial<UpsertUser>) {
+  const row: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (userData.email !== undefined) row.email = userData.email;
+  if (userData.password !== undefined) row.password = userData.password;
+  if (userData.firstName !== undefined) row.first_name = userData.firstName ?? null;
+  if (userData.lastName !== undefined) row.last_name = userData.lastName ?? null;
+
+  return row;
+}
+
 class AuthStorage implements IAuthStorage {
   async getUser(id: number): Promise<User | undefined> {
     const { data, error } = await supabase.from("users").select("*").eq("user_id", id).maybeSingle();
@@ -67,6 +81,18 @@ class AuthStorage implements IAuthStorage {
       .select("*")
       .single();
     if (error) throw error;
+    return userFromRow(data as UserRow);
+  }
+
+  async updateUser(id: number, userData: Partial<UpsertUser>): Promise<User> {
+    const { data, error } = await supabase
+      .from("users")
+      .update(userUpdateToRow(userData))
+      .eq("user_id", id)
+      .select("*")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("User not found");
     return userFromRow(data as UserRow);
   }
 }

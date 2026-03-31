@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { PieChart, ArrowRight, ShieldCheck, TrendingUp, Users, Mail, User, AlertCircle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { apiRequest } from "@/lib/queryClient";
+import type { User as AuthUser } from "@shared/models/auth";
 
 const stagger = {
   animate: { transition: { staggerChildren: 0.12 } },
@@ -23,6 +26,7 @@ const INPUT_CLASS =
   "w-full pl-12 pr-4 py-4 text-base border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-shadow";
 
 export default function EditProfileInformation() {
+  const queryClient = useQueryClient();
   const { user } = useAuth();
 
   const [firstName, setFirstName] = useState("");
@@ -30,6 +34,7 @@ export default function EditProfileInformation() {
   const [email, setEmail] = useState("");
 
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -42,12 +47,26 @@ export default function EditProfileInformation() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccessMessage("");
     setIsLoading(true);
 
     try {
-      // Frontend-only for now; wiring the update endpoint can come later.
-      await new Promise((r) => setTimeout(r, 600));
-      setError("Saving is not implemented yet. (Frontend-only page)");
+      const payload = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+      };
+
+      const response = await apiRequest("PUT", "/api/auth/user", payload);
+      const updatedUser: AuthUser = await response.json();
+
+      queryClient.setQueryData<AuthUser | null>(["/api/auth/user"], updatedUser);
+      setFirstName(updatedUser.firstName || "");
+      setLastName(updatedUser.lastName || "");
+      setEmail(updatedUser.email || "");
+      setSuccessMessage("Profile updated successfully.");
+    } catch (err: any) {
+      setError(err.message || "Failed to save profile changes");
     } finally {
       setIsLoading(false);
     }
@@ -182,6 +201,21 @@ export default function EditProfileInformation() {
               )}
             </AnimatePresence>
 
+            <AnimatePresence>
+              {successMessage && !error && (
+                <motion.div
+                  className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {successMessage}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <button
               type="submit"
               disabled={isLoading}
@@ -207,4 +241,3 @@ export default function EditProfileInformation() {
     </div>
   );
 }
-

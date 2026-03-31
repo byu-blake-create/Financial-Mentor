@@ -51,6 +51,49 @@ export async function registerRoutes(
   // === APP ROUTES ===
   // All routes require authentication
 
+  app.put("/api/auth/user", isAuthenticated, async (req: any, res) => {
+    const userId = getCurrentUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const firstName = typeof req.body?.firstName === "string" ? req.body.firstName.trim() : undefined;
+    const lastName = typeof req.body?.lastName === "string" ? req.body.lastName.trim() : undefined;
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : undefined;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(email)) {
+      return res.status(400).json({ message: "Please enter a valid email address" });
+    }
+
+    try {
+      const updatedUser = await storage.updateUser(userId, {
+        email,
+        firstName: firstName || null,
+        lastName: lastName || null,
+      });
+
+      if (req.user) {
+        req.user.email = updatedUser.email;
+        req.user.firstName = updatedUser.firstName;
+        req.user.lastName = updatedUser.lastName;
+      }
+
+      res.json(updatedUser);
+    } catch (error: any) {
+      const message = String(error?.message || "");
+      if (message.toLowerCase().includes("duplicate") || message.toLowerCase().includes("unique")) {
+        return res.status(400).json({ message: "That email address is already in use" });
+      }
+      throw error;
+    }
+  });
+
   app.get(api.dashboard.get.path, isAuthenticated, async (req, res) => {
     const userId = getCurrentUserId(req);
     
