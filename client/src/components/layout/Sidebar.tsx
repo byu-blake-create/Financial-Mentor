@@ -6,15 +6,13 @@ import {
   BookOpen, 
   MessageSquare, 
   LogOut,
-  UserCircle,
-  Receipt
+  UserCircle
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Budget", href: "/budget", icon: PieChart },
-  { name: "Transactions", href: "/transactions", icon: Receipt },
   { name: "Modules", href: "/modules", icon: BookOpen },
   { name: "Chat Expert", href: "/chat", icon: MessageSquare },
 ];
