@@ -20,6 +20,22 @@ export interface ModulesListResponse {
   watched: Module[];
 }
 
+export interface ModuleFeedbackInput {
+  moduleId: number;
+  rating: number;
+  comment?: string | null;
+}
+
+export interface ModuleFeedbackResponse {
+  id: number;
+  userId: number;
+  moduleId: number;
+  rating: number;
+  comment: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 export function useModules() {
   return useQuery({
     queryKey: [api.modules.list.path],
@@ -65,6 +81,30 @@ export function useUpdateModuleProgress() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.modules.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.modules.get.path] });
+    },
+  });
+}
+
+export function useSubmitModuleFeedback() {
+  return useMutation({
+    mutationFn: async (input: ModuleFeedbackInput) => {
+      const url = buildUrl(api.modules.feedback.path, { id: input.moduleId });
+      const res = await fetch(url, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rating: input.rating,
+          comment: input.comment ?? null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { message?: string }).message || "Failed to submit feedback");
+      }
+
+      return (await res.json()) as ModuleFeedbackResponse;
     },
   });
 }
