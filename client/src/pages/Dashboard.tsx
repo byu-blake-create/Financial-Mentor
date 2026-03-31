@@ -2,15 +2,11 @@ import { useDashboardData } from "@/hooks/use-dashboard";
 import { StatCard } from "@/components/ui/StatCard";
 import { ModuleCard } from "@/components/ui/ModuleCard";
 import { 
-  CreditCard, 
   TrendingUp, 
   AlertCircle, 
-  ArrowRight,
-  Wallet,
-  ShoppingBag
+  ArrowRight
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -133,50 +129,6 @@ export default function Dashboard() {
             .map((module) => (
               <ModuleCard key={module.id} {...module} />
             ))}
-        </div>
-      </div>
-
-      {/* Bottom Section: Recent Transactions */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold font-display">Recent Transactions</h2>
-          <Link href="/transactions" className="text-sm font-medium text-primary hover:underline">View All</Link>
-        </div>
-        
-        <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-          {data.recentTransactions.map((tx, index) => (
-            <div 
-              key={tx.id} 
-              className={`flex items-center justify-between p-4 hover:bg-muted/30 transition-colors ${
-                index !== data.recentTransactions.length - 1 ? 'border-b' : ''
-              }`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                  {tx.description.toLowerCase().includes('shopping') ? (
-                    <ShoppingBag className="w-5 h-5" />
-                  ) : tx.description.toLowerCase().includes('transfer') ? (
-                    <Wallet className="w-5 h-5" />
-                  ) : (
-                    <CreditCard className="w-5 h-5" />
-                  )}
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground">{tx.description}</p>
-                  <p className="text-xs text-muted-foreground">{format(new Date(tx.date), 'MMM d, yyyy')}</p>
-                </div>
-              </div>
-              <span className="font-mono font-medium text-foreground">
-                -${parseFloat(tx.amount).toFixed(2)}
-              </span>
-            </div>
-          ))}
-          
-          {data.recentTransactions.length === 0 && (
-            <div className="p-8 text-center text-muted-foreground">
-              No recent transactions found.
-            </div>
-          )}
         </div>
       </div>
     </div>

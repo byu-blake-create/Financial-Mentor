@@ -3,10 +3,12 @@ import {
   insertBudgetSchema, 
   insertCategorySchema, 
   insertTransactionSchema, 
+  insertModuleFeedbackSchema,
   budgets, 
   categories, 
   transactions, 
-  modules 
+  modules,
+  moduleFeedback,
 } from './schema';
 
 export const errorSchemas = {
@@ -57,6 +59,21 @@ export const api = {
       responses: {
         200: z.custom<typeof modules.$inferSelect>(),
         404: errorSchemas.notFound,
+      },
+    },
+    feedback: {
+      create: {
+        method: 'POST' as const,
+        path: '/api/modules/:id/feedback' as const,
+        body: insertModuleFeedbackSchema.pick({
+          rating: true,
+          comment: true,
+        }),
+        responses: {
+          201: z.custom<typeof moduleFeedback.$inferSelect>(),
+          400: errorSchemas.validation,
+          404: errorSchemas.notFound,
+        },
       },
     }
   },

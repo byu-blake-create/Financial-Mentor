@@ -58,6 +58,16 @@ export const userProgress = pgTable("user_progress", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const moduleFeedback = pgTable("module_feedback", {
+  id: serial("feedback_id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  moduleId: integer("module_id").notNull().references(() => modules.id, { onDelete: "cascade" }),
+  rating: integer("rating").notNull(),
+  comment: text("comment"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // === RELATIONS ===
 
 export const budgetsRelations = relations(budgets, ({ many }) => ({
@@ -78,6 +88,12 @@ export const insertCategorySchema = createInsertSchema(categories).omit({ id: tr
 export const insertTransactionSchema = createInsertSchema(transactions).omit({ id: true });
 export const insertModuleSchema = createInsertSchema(modules).omit({ id: true });
 export const insertUserProgressSchema = createInsertSchema(userProgress).omit({ id: true });
+export const insertModuleFeedbackSchema = createInsertSchema(moduleFeedback)
+  .omit({ id: true })
+  .extend({
+    rating: z.number().int().min(1).max(10),
+    comment: z.string().max(500).nullable().optional(),
+  });
 
 // === TYPES ===
 
@@ -95,6 +111,9 @@ export type InsertModule = z.infer<typeof insertModuleSchema>;
 
 export type UserProgress = typeof userProgress.$inferSelect;
 export type InsertUserProgress = z.infer<typeof insertUserProgressSchema>;
+
+export type ModuleFeedback = typeof moduleFeedback.$inferSelect;
+export type InsertModuleFeedback = z.infer<typeof insertModuleFeedbackSchema>;
 
 // === API TYPES ===
 

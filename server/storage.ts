@@ -7,6 +7,8 @@ import {
   type InsertCategory,
   type InsertTransaction,
   type InsertModule,
+  type ModuleFeedback,
+  type InsertModuleFeedback,
 } from "@shared/schema";
 import { supabase } from "./db";
 
@@ -131,6 +133,38 @@ function moduleFromRow(row: ModuleRow): Module {
   };
 }
 
+type ModuleFeedbackRow = {
+  feedback_id: number;
+  user_id: number;
+  module_id: number;
+  rating: number;
+  comment: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function moduleFeedbackFromRow(row: ModuleFeedbackRow): ModuleFeedback {
+  return {
+    id: row.feedback_id,
+    userId: row.user_id,
+    moduleId: row.module_id,
+    rating: row.rating,
+    comment: row.comment,
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  };
+}
+
+function moduleFeedbackToRow(insertFeedback: Partial<InsertModuleFeedback>) {
+  return {
+    user_id: insertFeedback.userId,
+    module_id: insertFeedback.moduleId,
+    rating: insertFeedback.rating,
+    comment: insertFeedback.comment ?? null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 function moduleToRow(insertModule: Partial<InsertModule>) {
   return {
     title: insertModule.title,
@@ -161,6 +195,7 @@ export interface IStorage extends IAuthStorage, IChatStorage {
   getModules(): Promise<Module[]>;
   getModule(id: number): Promise<Module | undefined>;
   createModule(module: InsertModule): Promise<Module>;
+  createModuleFeedback(feedback: InsertModuleFeedback): Promise<ModuleFeedback>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -286,6 +321,16 @@ export class DatabaseStorage implements IStorage {
     const { data, error } = await supabase.from("modules").insert(moduleToRow(insertModule)).select("*").single();
     if (error) throw error;
     return moduleFromRow(data as ModuleRow);
+  }
+
+  async createModuleFeedback(insertFeedback: InsertModuleFeedback): Promise<ModuleFeedback> {
+    const { data, error } = await supabase
+      .from("module_feedback")
+      .insert(moduleFeedbackToRow(insertFeedback))
+      .select("*")
+      .single();
+    if (error) throw error;
+    return moduleFeedbackFromRow(data as ModuleFeedbackRow);
   }
 }
 

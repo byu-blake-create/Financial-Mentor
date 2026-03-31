@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
+import { insertModuleFeedbackSchema } from "@shared/schema";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { registerChatRoutes } from "./replit_integrations/chat";
 
@@ -106,6 +107,44 @@ export async function registerRoutes(
       return res.status(404).json({ message: "Module not found" });
     }
     res.json(toClientModule(module, "Suggested"));
+  });
+
+  app.post(api.modules.feedback.create.path, isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const moduleId = parseInt(String(req.params.id), 10);
+    if (isNaN(moduleId)) {
+      return res.status(400).json({ message: "Invalid module ID", field: "id" });
+    }
+
+    const module = await storage.getModule(moduleId);
+    if (!module) {
+      return res.status(404).json({ message: "Module not found" });
+    }
+
+    const parsed = insertModuleFeedbackSchema
+      .pick({ rating: true, comment: true })
+      .safeParse(req.body);
+
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return res.status(400).json({
+        message: issue?.message ?? "Invalid payload",
+        field: issue?.path?.[0] ? String(issue.path[0]) : undefined,
+      });
+    }
+
+    const feedback = await storage.createModuleFeedback({
+      userId,
+      moduleId,
+      rating: parsed.data.rating,
+      comment: parsed.data.comment?.trim() ? parsed.data.comment.trim() : null,
+    });
+
+    return res.status(201).json(feedback);
   });
 
   app.get(api.budget.get.path, isAuthenticated, async (req, res) => {
