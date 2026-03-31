@@ -8,16 +8,17 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Sparkles, Calendar } from "lucide-react";
+import { Trash2, Sparkles, Calendar, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ActiveGoalCardProps = {
   goal: ActiveGoal;
   onSavedChange: (saved: number) => void;
+  onEdit: () => void;
   onRemove: () => void;
 };
 
-export function ActiveGoalCard({ goal, onSavedChange, onRemove }: ActiveGoalCardProps) {
+export function ActiveGoalCard({ goal, onSavedChange, onEdit, onRemove }: ActiveGoalCardProps) {
   const pct = useMemo(() => {
     if (goal.targetAmount <= 0) return 0;
     return Math.min(100, Math.round((goal.savedAmount / goal.targetAmount) * 100));
@@ -64,15 +65,26 @@ export function ActiveGoalCard({ goal, onSavedChange, onRemove }: ActiveGoalCard
               <h3 className="text-lg font-bold font-display leading-tight">{goal.title}</h3>
               <p className="text-sm text-muted-foreground">{goal.description}</p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 text-muted-foreground hover:text-destructive self-end sm:self-start"
-              onClick={onRemove}
-              aria-label="Remove goal"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1 self-end sm:self-start">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={onEdit}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={onRemove}
+                aria-label="Remove goal"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-2">

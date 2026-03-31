@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
-import { useFinancialGoals } from "@/hooks/use-financial-goals";
+import { useFinancialGoals, type ActiveGoal } from "@/hooks/use-financial-goals";
 import type { PresetGoalDefinition } from "@/lib/financial-goals-data";
 import {
   GOAL_CATEGORIES,
@@ -43,6 +43,7 @@ export default function FinancialGoals() {
     addPresetGoal,
     addCustomGoal,
     updateSaved,
+    updateGoalDetails,
     removeGoal,
     stats,
   } = useFinancialGoals(userId);
@@ -57,6 +58,12 @@ export default function FinancialGoals() {
   const [customTarget, setCustomTarget] = useState("");
   const [customCategory, setCustomCategory] = useState<GoalCategoryId | "">("");
   const [customDeadline, setCustomDeadline] = useState("");
+
+  const [editGoal, setEditGoal] = useState<ActiveGoal | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editTarget, setEditTarget] = useState("");
+  const [editCategory, setEditCategory] = useState<GoalCategoryId | "">("");
+  const [editDeadline, setEditDeadline] = useState("");
 
   const filteredPresets = useMemo(() => {
     if (filter === "all") return PRESET_GOALS;
@@ -128,6 +135,66 @@ export default function FinancialGoals() {
     setCustomTarget("");
     setCustomCategory("");
     setCustomDeadline("");
+  };
+
+  const openEditGoal = (goal: ActiveGoal) => {
+    setEditGoal(goal);
+    setEditTitle(goal.title);
+    setEditTarget(String(goal.targetAmount));
+    setEditCategory(goal.categoryId ?? "");
+    setEditDeadline(goal.deadline ? new Date(goal.deadline).toISOString().slice(0, 10) : "");
+  };
+
+  const closeEditDialog = () => {
+    setEditGoal(null);
+    setEditTitle("");
+    setEditTarget("");
+    setEditCategory("");
+    setEditDeadline("");
+  };
+
+  const submitEdit = () => {
+    if (!editGoal) return;
+    const title = editTitle.trim();
+    const t = parseFloat(editTarget);
+
+    if (!title) {
+      toast({ title: "Name your goal", description: "Add a short title.", variant: "destructive" });
+      return;
+    }
+
+    if (!Number.isFinite(t) || t <= 0) {
+      toast({
+        title: "Set a target amount",
+        description: "Use a positive target amount.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const deadlineIso = editDeadline
+      ? new Date(editDeadline + "T12:00:00").toISOString()
+      : null;
+
+    const ok = updateGoalDetails({
+      goalId: editGoal.id,
+      title,
+      targetAmount: t,
+      deadline: deadlineIso,
+      categoryId: editCategory || undefined,
+    });
+
+    if (!ok) {
+      toast({
+        title: "Could not update goal",
+        description: "Try opening the goal again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "Goal updated", description: "Your changes have been saved." });
+    closeEditDialog();
   };
 
   const isPresetActive = (id: string) =>
@@ -206,6 +273,7 @@ export default function FinancialGoals() {
                 key={g.id}
                 goal={g}
                 onSavedChange={(v) => updateSaved(g.id, v)}
+                onEdit={() => openEditGoal(g)}
                 onRemove={() => {
                   removeGoal(g.id);
                   toast({ title: "Goal removed" });
@@ -390,6 +458,80 @@ export default function FinancialGoals() {
             </Button>
             <Button onClick={submitCustom} className="rounded-xl">
               Save goal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit goal dialog */}
+      <Dialog open={!!editGoal} onOpenChange={(o) => !o && closeEditDialog()}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Edit goal</DialogTitle>
+            <DialogDescription>
+              Update the name, target, category, or deadline for this goal.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-title">Goal name</Label>
+              <Input
+                id="edit-title"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-target">
+                Target amount {editGoal?.unit === "usd" ? "($)" : `(${editGoal?.unit})`}
+              </Label>
+              <Input
+                id="edit-target"
+                type="number"
+                min={1}
+                step={1}
+                value={editTarget}
+                onChange={(e) => setEditTarget(e.target.value)}
+                className="tabular-nums"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Category (optional)</Label>
+              <Select
+                value={editCategory || "none"}
+                onValueChange={(v) =>
+                  setEditCategory(v === "none" ? "" : (v as GoalCategoryId))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No category</SelectItem>
+                  {GOAL_CATEGORIES.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-deadline">Deadline (optional)</Label>
+              <Input
+                id="edit-deadline"
+                type="date"
+                value={editDeadline}
+                onChange={(e) => setEditDeadline(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={closeEditDialog}>
+              Cancel
+            </Button>
+            <Button onClick={submitEdit} className="rounded-xl">
+              Save changes
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -157,6 +157,37 @@ export function useFinancialGoals(userId: number | undefined) {
     [goals, updateMutation],
   );
 
+  const updateGoalDetails = useCallback(
+    (input: {
+      goalId: string;
+      title: string;
+      targetAmount: number;
+      deadline: string | null;
+      categoryId?: GoalCategoryId;
+    }) => {
+      const goal = goals.find((g) => g.id === input.goalId);
+      if (!goal) return false;
+
+      const title = input.title.trim();
+      if (!title) return false;
+
+      const cat = input.categoryId
+        ? GOAL_CATEGORIES.find((c) => c.id === input.categoryId)
+        : undefined;
+
+      updateMutation.mutate({
+        id: goal.dbId,
+        title,
+        targetAmount: input.targetAmount,
+        deadline: input.deadline,
+        categoryId: input.categoryId ?? null,
+        categoryLabel: cat?.label ?? (goal.kind === "custom" ? "Custom" : "Goal"),
+      });
+      return true;
+    },
+    [goals, updateMutation],
+  );
+
   const removeGoal = useCallback(
     (goalId: string) => {
       const goal = goals.find((g) => g.id === goalId);
@@ -183,6 +214,7 @@ export function useFinancialGoals(userId: number | undefined) {
     addPresetGoal,
     addCustomGoal,
     updateSaved,
+    updateGoalDetails,
     removeGoal,
     stats,
   };
