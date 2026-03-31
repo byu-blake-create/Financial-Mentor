@@ -3,11 +3,13 @@ import {
   type Category,
   type Transaction,
   type Module,
+  type ModuleFeedback,
   type Goal,
   type InsertBudget,
   type InsertCategory,
   type InsertTransaction,
   type InsertModule,
+  type InsertModuleFeedback,
   type InsertGoal,
 } from "@shared/schema";
 import { supabase } from "./db";
@@ -161,6 +163,28 @@ function moduleToRow(insertModule: Partial<InsertModule>) {
   };
 }
 
+type ModuleFeedbackRow = {
+  feedback_id: number;
+  user_id: number;
+  module_id: number;
+  rating: number;
+  comment: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function moduleFeedbackFromRow(row: ModuleFeedbackRow): ModuleFeedback {
+  return {
+    id: row.feedback_id,
+    userId: row.user_id,
+    moduleId: row.module_id,
+    rating: row.rating,
+    comment: row.comment,
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  };
+}
+
 type GoalRow = {
   goal_id: number;
   user_id: number;
@@ -218,6 +242,7 @@ export interface IStorage extends IAuthStorage, IChatStorage {
   getModules(): Promise<Module[]>;
   getModule(id: number): Promise<Module | undefined>;
   createModule(module: InsertModule): Promise<Module>;
+  createModuleFeedback(input: InsertModuleFeedback): Promise<ModuleFeedback>;
 
   // Goals
   getGoalsByUser(userId: number): Promise<Goal[]>;
@@ -372,6 +397,21 @@ export class DatabaseStorage implements IStorage {
     const { data, error } = await supabase.from("modules").insert(moduleToRow(insertModule)).select("*").single();
     if (error) throw error;
     return moduleFromRow(data as ModuleRow);
+  }
+
+  async createModuleFeedback(input: InsertModuleFeedback): Promise<ModuleFeedback> {
+    const { data, error } = await supabase
+      .from("module_feedback")
+      .insert({
+        user_id: input.userId,
+        module_id: input.moduleId,
+        rating: input.rating,
+        comment: input.comment ?? null,
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return moduleFeedbackFromRow(data as ModuleFeedbackRow);
   }
 
   async getGoalsByUser(userId: number): Promise<Goal[]> {
