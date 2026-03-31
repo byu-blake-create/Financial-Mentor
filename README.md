@@ -4,7 +4,7 @@
 
 Financial Mentor is a web app that helps college students (18–25) build basic financial confidence without needing prior budgeting knowledge. The primary user is independent (paying rent, buying groceries, managing subscriptions) but still learning how to plan spending and avoid overspending. The product combines a simple budgeting dashboard with guided learning modules so users can both **track** and **improve** their habits in one place. Users can view their monthly budget, categorize planned spending, and track active financial goals. The app also surfaces learning content (“modules”) to reinforce financial literacy alongside day-to-day money decisions. This repo includes the backend foundation (Supabase + API) needed to persist data and support continued development. 
 
-**Update:** The legacy Transactions page has been removed from the UI. The Dashboard now includes a **Goals preview** section that surfaces your active goals (from the Goals page). New accounts also automatically get a default budget row so the Budget page loads immediately.
+**Update:** The legacy Transactions page has been removed from the UI. The Dashboard now includes a **Goals preview** section that surfaces your active goals (from the Goals page). It also includes **Up Next** and **Watchlist** learning sections so users can keep track of unwatched modules and modules they saved for later. New accounts also automatically get a default budget row so the Budget page loads immediately.
 
 ## EARS Requirements
 
@@ -208,7 +208,7 @@ Navigate to `http://localhost:4000` and log in with a seeded user:
 
 ### 2. View the dashboard
 
-After logging in you will be redirected to the **Dashboard**, which displays a summary of your current budget, a **Goals preview**, and learning modules.
+After logging in you will be redirected to the **Dashboard**, which displays a summary of your current budget, a **Goals preview**, and learning modules. The learning area includes **Up Next** for unwatched modules and **Watchlist** for modules the user has explicitly saved for later.
 
 ### 3. Create or edit a budget category
 
