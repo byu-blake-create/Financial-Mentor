@@ -1,13 +1,11 @@
-import { z } from 'zod';
-import { 
-  insertBudgetSchema, 
-  insertCategorySchema, 
-  insertTransactionSchema, 
-  budgets, 
-  categories, 
-  transactions, 
-  modules 
-} from './schema';
+import { z } from "zod";
+import {
+  budgets,
+  categories,
+  goals,
+  modules,
+  transactions,
+} from "./schema";
 
 export const errorSchemas = {
   validation: z.object({
@@ -36,15 +34,32 @@ export const moduleResponseSchema = z.object({
   updatedAt: z.string().nullable(),
 });
 
+export const budgetCategoryResponseSchema = z.object({
+  id: z.number(),
+  budgetId: z.number(),
+  name: z.string(),
+  allocatedAmount: z.string(),
+  color: z.string(),
+});
+
+export const budgetResponseSchema = z.object({
+  id: z.number(),
+  userId: z.number(),
+  totalAmount: z.string(),
+  period: z.string(),
+  categories: z.array(budgetCategoryResponseSchema),
+});
+
 export const modulesListResponseSchema = z.object({
-  keepLearning: z.array(moduleResponseSchema),
   suggested: z.array(moduleResponseSchema),
   popular: z.array(moduleResponseSchema),
   all: z.array(moduleResponseSchema),
+  watchLater: z.array(moduleResponseSchema),
+  watched: z.array(moduleResponseSchema),
 });
 
 export const dashboardResponseSchema = z.object({
-  budget: z.custom<typeof budgets.$inferSelect & { categories: typeof categories.$inferSelect[] }>().nullable(),
+  budget: budgetResponseSchema.nullable(),
   recentTransactions: z.array(z.custom<typeof transactions.$inferSelect>()),
   modules: z.object({
     upNext: z.array(moduleResponseSchema),
@@ -69,8 +84,8 @@ export type ModuleProgressUpdateRequest = z.infer<typeof moduleProgressUpdateSch
 export const api = {
   dashboard: {
     get: {
-      method: 'GET' as const,
-      path: '/api/dashboard' as const,
+      method: "GET" as const,
+      path: "/api/dashboard" as const,
       responses: {
         200: dashboardResponseSchema,
       },
@@ -78,23 +93,23 @@ export const api = {
   },
   modules: {
     list: {
-      method: 'GET' as const,
-      path: '/api/modules' as const,
+      method: "GET" as const,
+      path: "/api/modules" as const,
       responses: {
         200: modulesListResponseSchema,
       },
     },
     get: {
-      method: 'GET' as const,
-      path: '/api/modules/:id' as const,
+      method: "GET" as const,
+      path: "/api/modules/:id" as const,
       responses: {
         200: moduleResponseSchema,
         404: errorSchemas.notFound,
       },
     },
     progress: {
-      method: 'PATCH' as const,
-      path: '/api/modules/:id/progress' as const,
+      method: "PATCH" as const,
+      path: "/api/modules/:id/progress" as const,
       body: moduleProgressUpdateSchema,
       responses: {
         200: moduleResponseSchema,
@@ -102,27 +117,36 @@ export const api = {
         401: errorSchemas.notFound,
         404: errorSchemas.notFound,
       },
-    }
+    },
   },
   budget: {
     get: {
-      method: 'GET' as const,
-      path: '/api/budget' as const,
+      method: "GET" as const,
+      path: "/api/budget" as const,
       responses: {
-        200: z.custom<typeof budgets.$inferSelect & { categories: typeof categories.$inferSelect[] }>(),
+        200: budgetResponseSchema,
         404: errorSchemas.notFound,
-      }
-    }
+      },
+    },
   },
   transactions: {
     list: {
-      method: 'GET' as const,
-      path: '/api/transactions' as const,
+      method: "GET" as const,
+      path: "/api/transactions" as const,
       responses: {
         200: z.array(z.custom<typeof transactions.$inferSelect>()),
-      }
-    }
-  }
+      },
+    },
+  },
+  goals: {
+    list: {
+      method: "GET" as const,
+      path: "/api/goals" as const,
+      responses: {
+        200: z.array(z.custom<typeof goals.$inferSelect>()),
+      },
+    },
+  },
 };
 
 export function buildUrl(path: string, params?: Record<string, string | number>): string {

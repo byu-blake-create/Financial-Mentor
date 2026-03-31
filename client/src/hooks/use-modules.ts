@@ -7,7 +7,7 @@ import {
   type ModulesListResponse,
 } from "@shared/routes";
 
-export type LearningModule = ModuleResponse;
+export type Module = ModuleResponse;
 
 export function useModules() {
   return useQuery({
@@ -15,7 +15,7 @@ export function useModules() {
     queryFn: async () => {
       const res = await fetch(api.modules.list.path, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch modules");
-      return await res.json() as ModulesListResponse;
+      return (await res.json()) as ModulesListResponse;
     },
   });
 }
@@ -27,30 +27,35 @@ export function useModule(id: number) {
       const url = buildUrl(api.modules.get.path, { id });
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch module");
-      return await res.json() as LearningModule;
+      return (await res.json()) as Module;
     },
     enabled: !!id,
   });
 }
 
-export function useUpdateModuleProgress(id: number) {
+export function useUpdateModuleProgress() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (updates: ModuleProgressUpdateRequest) => {
-      const url = buildUrl(api.modules.progress.path, { id });
+    mutationFn: async (input: { moduleId: number } & ModuleProgressUpdateRequest) => {
+      const url = buildUrl(api.modules.progress.path, { id: input.moduleId });
+      const { moduleId: _moduleId, ...body } = input;
       const res = await fetch(url, {
         method: api.modules.progress.method,
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(updates),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Failed to update module progress");
-      return await res.json() as LearningModule;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { message?: string }).message || "Failed to update progress");
+      }
+      return (await res.json()) as Module;
     },
-    onSuccess: (updatedModule) => {
-      queryClient.setQueryData([api.modules.get.path, id], updatedModule);
+    onSuccess: (updatedModule, variables) => {
+      queryClient.setQueryData([api.modules.get.path, variables.moduleId], updatedModule);
       queryClient.invalidateQueries({ queryKey: [api.modules.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.modules.get.path] });
       queryClient.invalidateQueries({ queryKey: [api.dashboard.get.path] });
     },
   });

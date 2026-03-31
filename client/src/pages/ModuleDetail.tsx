@@ -1,34 +1,30 @@
-import { useRoute } from "wouter";
-import { useModule, useUpdateModuleProgress } from "@/hooks/use-modules";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useModule, useUpdateModuleProgress } from "@/hooks/use-modules";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Bookmark, CheckCircle2, PlayCircle } from "lucide-react";
-import { Link } from "wouter";
+import { cn } from "@/lib/utils";
+import { ArrowLeft, Bookmark, Check, PlayCircle } from "lucide-react";
+import { Link, useRoute } from "wouter";
 
-// Convert YouTube URL to embed URL
 function getYouTubeEmbedUrl(url: string | null): string | null {
   if (!url) return null;
-  
-  // Handle different YouTube URL formats
+
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/,
     /youtube\.com\/embed\/([a-zA-Z0-9_-]+)/,
   ];
-  
+
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match && match[1]) {
       return `https://www.youtube.com/embed/${match[1]}`;
     }
   }
-  
-  // If it's already an embed URL, return as is
-  if (url.includes('youtube.com/embed/')) {
+
+  if (url.includes("youtube.com/embed/")) {
     return url;
   }
-  
+
   return null;
 }
 
@@ -36,7 +32,7 @@ export default function ModuleDetail() {
   const [, params] = useRoute("/modules/:id");
   const moduleId = params ? parseInt(params.id, 10) : null;
   const { data: module, isLoading, error } = useModule(moduleId || 0);
-  const updateProgress = useUpdateModuleProgress(moduleId || 0);
+  const updateProgress = useUpdateModuleProgress();
   const { toast } = useToast();
 
   if (isLoading) {
@@ -57,38 +53,21 @@ export default function ModuleDetail() {
     );
   }
 
-  const currentModule = module;
-  const embedUrl = getYouTubeEmbedUrl(currentModule.videoUrl);
-  const isUpdating = updateProgress.isPending;
+  const embedUrl = getYouTubeEmbedUrl(module.videoUrl);
+  const progressPending =
+    updateProgress.isPending && updateProgress.variables?.moduleId === module.id;
 
-  async function handleToggleWatched() {
+  const saveProgress = async (patch: { watched?: boolean; watchLater?: boolean }) => {
     try {
-      await updateProgress.mutateAsync({
-        watched: !currentModule.watched,
-        watchLater: currentModule.watched ? currentModule.watchLater : false,
-      });
-    } catch {
+      await updateProgress.mutateAsync({ moduleId: module.id, ...patch });
+    } catch (e: unknown) {
       toast({
-        title: "Could not update module",
-        description: "Please try again.",
+        title: "Could not save",
+        description: e instanceof Error ? e.message : "Please try again.",
         variant: "destructive",
       });
     }
-  }
-
-  async function handleToggleWatchlist() {
-    try {
-      await updateProgress.mutateAsync({
-        watchLater: !currentModule.watchLater,
-      });
-    } catch {
-      toast({
-        title: "Could not update watchlist",
-        description: "Please try again.",
-        variant: "destructive",
-      });
-    }
-  }
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -99,45 +78,38 @@ export default function ModuleDetail() {
 
       <div className="space-y-6">
         <div>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <div className="text-xs font-semibold text-primary uppercase tracking-wider">
-              {module.category}
-            </div>
-            {module.watched && (
-              <Badge variant="secondary" className="gap-1">
-                <CheckCircle2 className="w-3 h-3" />
-                Watched
-              </Badge>
-            )}
-            {module.watchLater && !module.watched && (
-              <Badge variant="outline" className="gap-1">
-                <Bookmark className="w-3 h-3" />
-                Watchlist
-              </Badge>
-            )}
+          <div className="text-xs font-semibold text-primary mb-2 uppercase tracking-wider">
+            {module.category}
           </div>
           <h1 className="text-4xl font-bold font-display mb-4">{module.title}</h1>
           <p className="text-lg text-muted-foreground leading-relaxed">
             {module.description}
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 mt-6">
             <Button
               type="button"
-              variant={module.watched ? "outline" : "default"}
-              onClick={handleToggleWatched}
-              disabled={isUpdating}
+              variant={module.watched ? "secondary" : "default"}
+              disabled={progressPending}
+              onClick={() =>
+                saveProgress({
+                  watched: !module.watched,
+                  watchLater: module.watched ? module.watchLater : false,
+                })
+              }
+              className="gap-2"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              {module.watched ? "Mark Unwatched" : "Mark Watched"}
+              <Check className="h-4 w-4" />
+              {module.watched ? "Mark as not watched" : "Mark as watched"}
             </Button>
             <Button
               type="button"
               variant={module.watchLater ? "secondary" : "outline"}
-              onClick={handleToggleWatchlist}
-              disabled={isUpdating}
+              disabled={progressPending}
+              onClick={() => saveProgress({ watchLater: !module.watchLater })}
+              className="gap-2"
             >
-              <Bookmark className="w-4 h-4" />
-              {module.watchLater ? "Remove From Watchlist" : "Add To Watchlist"}
+              <Bookmark className={cn("h-4 w-4", module.watchLater && "fill-current")} />
+              {module.watchLater ? "Remove from watch later" : "Watch later"}
             </Button>
           </div>
         </div>

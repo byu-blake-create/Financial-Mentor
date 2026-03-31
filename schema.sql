@@ -29,9 +29,15 @@ CREATE TABLE IF NOT EXISTS budget_categories (
     category_id SERIAL PRIMARY KEY,
     budget_id INTEGER NOT NULL,
     label VARCHAR(100) NOT NULL,
+    allocated_amount DECIMAL(12, 2) DEFAULT 0 NOT NULL,
+    color VARCHAR(32) DEFAULT '#64748b' NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_category_budget FOREIGN KEY (budget_id) REFERENCES budget(budget_id) ON DELETE CASCADE
 );
+
+-- Existing databases: run once if columns are missing
+-- ALTER TABLE budget_categories ADD COLUMN IF NOT EXISTS allocated_amount DECIMAL(12, 2) DEFAULT 0 NOT NULL;
+-- ALTER TABLE budget_categories ADD COLUMN IF NOT EXISTS color VARCHAR(32) DEFAULT '#64748b' NOT NULL;
 
 -- Transactions Table
 CREATE TABLE IF NOT EXISTS transactions (
@@ -71,6 +77,9 @@ CREATE TABLE IF NOT EXISTS user_progress (
     CONSTRAINT fk_progress_module FOREIGN KEY (module_id) REFERENCES modules(module_id) ON DELETE CASCADE,
     CONSTRAINT unique_user_module UNIQUE (user_id, module_id)
 );
+
+-- If the table already existed without watch_later, run once in Supabase SQL editor:
+-- ALTER TABLE user_progress ADD COLUMN IF NOT EXISTS watch_later BOOLEAN DEFAULT FALSE NOT NULL;
 
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_budget_user_id ON budget(user_id);

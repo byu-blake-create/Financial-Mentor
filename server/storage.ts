@@ -4,11 +4,13 @@ import {
   type Transaction,
   type Module,
   type UserProgress,
+  type Goal,
   type InsertBudget,
   type InsertCategory,
   type InsertTransaction,
   type InsertModule,
   type InsertUserProgress,
+  type InsertGoal,
 } from "@shared/schema";
 import { supabase } from "./db";
 
@@ -58,6 +60,8 @@ type CategoryRow = {
   category_id: number;
   budget_id: number;
   label: string;
+  allocated_amount?: string | number | null;
+  color?: string | null;
   created_at: string | null;
 };
 
@@ -66,15 +70,31 @@ function categoryFromRow(row: CategoryRow): Category {
     id: row.category_id,
     budgetId: row.budget_id,
     label: row.label,
+    allocatedAmount:
+      row.allocated_amount != null && row.allocated_amount !== ""
+        ? String(row.allocated_amount)
+        : "0",
+    color: row.color && row.color.length > 0 ? row.color : "#64748b",
     createdAt: toDate(row.created_at),
   };
 }
 
-function categoryToRow(insertCategory: Partial<InsertCategory>) {
+function categoryInsertRow(insert: InsertCategory) {
   return {
-    budget_id: insertCategory.budgetId,
-    label: insertCategory.label,
+    budget_id: insert.budgetId,
+    label: insert.label,
+    allocated_amount: insert.allocatedAmount ?? "0",
+    color: insert.color ?? "#64748b",
   };
+}
+
+function categoryPatchRow(updates: Partial<InsertCategory>) {
+  const row: Record<string, unknown> = {};
+  if (updates.budgetId !== undefined) row.budget_id = updates.budgetId;
+  if (updates.label !== undefined) row.label = updates.label;
+  if (updates.allocatedAmount !== undefined) row.allocated_amount = updates.allocatedAmount;
+  if (updates.color !== undefined) row.color = updates.color;
+  return row;
 }
 
 type TransactionRow = {
@@ -143,6 +163,42 @@ function moduleToRow(insertModule: Partial<InsertModule>) {
   };
 }
 
+type GoalRow = {
+  goal_id: number;
+  user_id: number;
+  kind: string;
+  preset_id: string | null;
+  title: string;
+  description: string | null;
+  category_label: string | null;
+  category_id: string | null;
+  target_amount: string;
+  saved_amount: string;
+  unit: string;
+  deadline: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function goalFromRow(row: GoalRow): Goal {
+  return {
+    id: row.goal_id,
+    userId: row.user_id,
+    kind: row.kind,
+    presetId: row.preset_id,
+    title: row.title,
+    description: row.description,
+    categoryLabel: row.category_label,
+    categoryId: row.category_id,
+    targetAmount: row.target_amount,
+    savedAmount: row.saved_amount,
+    unit: row.unit,
+    deadline: toDate(row.deadline),
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  };
+}
+
 type UserProgressRow = {
   progress_id: number;
   user_id: number;
@@ -185,6 +241,7 @@ function userProgressToRow(insertProgress: Partial<InsertUserProgress>) {
 export interface IStorage extends IAuthStorage, IChatStorage {
   // Budget
   getUserBudget(userId: number): Promise<Budget | undefined>;
+  ensureUserBudget(userId: number): Promise<Budget>;
   createBudget(budget: InsertBudget): Promise<Budget>;
   updateBudget(budgetId: number, updates: Partial<InsertBudget>): Promise<Budget>;
   
@@ -203,14 +260,19 @@ export interface IStorage extends IAuthStorage, IChatStorage {
   getModule(id: number): Promise<Module | undefined>;
   createModule(module: InsertModule): Promise<Module>;
 
-  // Module progress
+  // Goals
+  getGoalsByUser(userId: number): Promise<Goal[]>;
+  createGoal(userId: number, data: InsertGoal): Promise<Goal>;
+  updateGoal(goalId: number, userId: number, updates: Partial<InsertGoal>): Promise<Goal>;
+  deleteGoal(goalId: number, userId: number): Promise<void>;
+  getUserModuleProgressMap(userId: number): Promise<Record<number, { watched: boolean; watchLater: boolean }>>;
   getUserModuleProgress(userId: number): Promise<UserProgress[]>;
   getUserModuleProgressEntry(userId: number, moduleId: number): Promise<UserProgress | undefined>;
   upsertUserModuleProgress(
     userId: number,
     moduleId: number,
-    updates: { watched?: boolean; watchLater?: boolean }
-  ): Promise<UserProgress>;
+    patch: { watched?: boolean; watchLater?: boolean }
+  ): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -218,6 +280,7 @@ export class DatabaseStorage implements IStorage {
   getUser = authStorage.getUser.bind(authStorage);
   getUserByEmail = authStorage.getUserByEmail.bind(authStorage);
   upsertUser = authStorage.upsertUser.bind(authStorage);
+  updateUser = authStorage.updateUser.bind(authStorage);
   
   // Inherit Chat Storage methods
   getConversation = chatStorage.getConversation.bind(chatStorage);
@@ -239,6 +302,18 @@ export class DatabaseStorage implements IStorage {
       .maybeSingle();
     if (error) throw error;
     return data ? budgetFromRow(data as BudgetRow) : undefined;
+  }
+
+  async ensureUserBudget(userId: number): Promise<Budget> {
+    const existing = await this.getUserBudget(userId);
+    if (existing) return existing;
+    // Create a minimal default budget so the Budget page has something to load.
+    return await this.createBudget({
+      userId,
+      monthlyLimit: "0",
+      weeklyLimit: "0",
+      date: new Date(),
+    } as InsertBudget);
   }
 
   async createBudget(insertBudget: InsertBudget): Promise<Budget> {
@@ -264,7 +339,7 @@ export class DatabaseStorage implements IStorage {
   async createCategory(insertCategory: InsertCategory): Promise<Category> {
     const { data, error } = await supabase
       .from("budget_categories")
-      .insert(categoryToRow(insertCategory))
+      .insert(categoryInsertRow(insertCategory))
       .select("*")
       .single();
     if (error) throw error;
@@ -272,9 +347,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCategory(categoryId: number, updates: Partial<InsertCategory>): Promise<Category> {
+    const patch = categoryPatchRow(updates);
+    if (Object.keys(patch).length === 0) {
+      throw new Error("No category fields to update");
+    }
     const { data, error } = await supabase
       .from("budget_categories")
-      .update(categoryToRow(updates))
+      .update(patch)
       .eq("category_id", categoryId)
       .select("*")
       .maybeSingle();
@@ -338,6 +417,76 @@ export class DatabaseStorage implements IStorage {
     return moduleFromRow(data as ModuleRow);
   }
 
+  async getGoalsByUser(userId: number): Promise<Goal[]> {
+    const { data, error } = await supabase
+      .from("goals")
+      .select("*")
+      .eq("user_id", userId)
+      .order("goal_id", { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((r) => goalFromRow(r as GoalRow));
+  }
+
+  async createGoal(userId: number, input: InsertGoal): Promise<Goal> {
+    const { data, error } = await supabase
+      .from("goals")
+      .insert({
+        user_id: userId,
+        kind: input.kind ?? "custom",
+        preset_id: input.presetId ?? null,
+        title: input.title,
+        description: input.description ?? null,
+        category_label: input.categoryLabel ?? null,
+        category_id: input.categoryId ?? null,
+        target_amount: String(input.targetAmount ?? 0),
+        saved_amount: String(input.savedAmount ?? 0),
+        unit: input.unit ?? "usd",
+        deadline: input.deadline
+          ? (input.deadline instanceof Date ? input.deadline : new Date(String(input.deadline))).toISOString()
+          : null,
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return goalFromRow(data as GoalRow);
+  }
+
+  async updateGoal(goalId: number, userId: number, updates: Partial<InsertGoal>): Promise<Goal> {
+    const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (updates.title !== undefined) row.title = updates.title;
+    if (updates.description !== undefined) row.description = updates.description ?? null;
+    if (updates.categoryLabel !== undefined) row.category_label = updates.categoryLabel ?? null;
+    if (updates.categoryId !== undefined) row.category_id = updates.categoryId ?? null;
+    if (updates.targetAmount !== undefined) row.target_amount = String(updates.targetAmount ?? 0);
+    if (updates.savedAmount !== undefined) row.saved_amount = String(updates.savedAmount ?? 0);
+    if (updates.unit !== undefined) row.unit = updates.unit;
+    if (updates.deadline !== undefined) {
+      row.deadline = updates.deadline === null
+        ? null
+        : (updates.deadline instanceof Date ? updates.deadline : new Date(String(updates.deadline))).toISOString();
+    }
+
+    const { data, error } = await supabase
+      .from("goals")
+      .update(row)
+      .eq("goal_id", goalId)
+      .eq("user_id", userId)
+      .select("*")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("Goal not found");
+    return goalFromRow(data as GoalRow);
+  }
+
+  async deleteGoal(goalId: number, userId: number): Promise<void> {
+    const { error } = await supabase
+      .from("goals")
+      .delete()
+      .eq("goal_id", goalId)
+      .eq("user_id", userId);
+    if (error) throw error;
+  }
+
   async getUserModuleProgress(userId: number): Promise<UserProgress[]> {
     const { data, error } = await supabase
       .from("user_progress")
@@ -359,20 +508,38 @@ export class DatabaseStorage implements IStorage {
     return data ? userProgressFromRow(data as UserProgressRow) : undefined;
   }
 
+  async getUserModuleProgressMap(userId: number): Promise<Record<number, { watched: boolean; watchLater: boolean }>> {
+    const progress = await this.getUserModuleProgress(userId);
+    return progress.reduce<Record<number, { watched: boolean; watchLater: boolean }>>((map, entry) => {
+      map[entry.moduleId] = {
+        watched: entry.status,
+        watchLater: entry.watchLater,
+      };
+      return map;
+    }, {});
+  }
+
   async upsertUserModuleProgress(
     userId: number,
     moduleId: number,
-    updates: { watched?: boolean; watchLater?: boolean }
-  ): Promise<UserProgress> {
+    patch: { watched?: boolean; watchLater?: boolean }
+  ): Promise<void> {
     const existing = await this.getUserModuleProgressEntry(userId, moduleId);
-    const watched = updates.watched ?? existing?.status ?? false;
-    const watchLater = updates.watchLater ?? existing?.watchLater ?? false;
-    const completedAt =
-      watched
-        ? existing?.completedAt ?? new Date()
-        : null;
+    const watched = patch.watched ?? existing?.status ?? false;
+    const watchLater = patch.watchLater ?? existing?.watchLater ?? false;
 
-    const { data, error } = await supabase
+    if (!watched && !watchLater) {
+      const { error: deleteError } = await supabase
+        .from("user_progress")
+        .delete()
+        .eq("user_id", userId)
+        .eq("module_id", moduleId);
+      if (deleteError) throw deleteError;
+      return;
+    }
+
+    const completedAt = watched ? existing?.completedAt ?? new Date() : null;
+    const { error } = await supabase
       .from("user_progress")
       .upsert(
         userProgressToRow({
@@ -382,12 +549,11 @@ export class DatabaseStorage implements IStorage {
           watchLater,
           completedAt,
         }),
-        { onConflict: "user_id,module_id" }
-      )
-      .select("*")
-      .single();
+        {
+          onConflict: "user_id,module_id",
+        }
+      );
     if (error) throw error;
-    return userProgressFromRow(data as UserProgressRow);
   }
 }
 
