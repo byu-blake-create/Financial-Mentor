@@ -2,18 +2,8 @@ import { z } from "zod";
 import {
   budgets,
   categories,
-import { z } from 'zod';
-import { 
-  insertBudgetSchema, 
-  insertCategorySchema, 
-  insertTransactionSchema, 
-  insertModuleFeedbackSchema,
-  budgets, 
-  categories, 
-  transactions, 
-  modules,
   goals,
-  modules,
+  insertModuleFeedbackSchema,
   transactions,
 } from "./schema";
 
@@ -123,9 +113,14 @@ export const api = {
       body: moduleProgressUpdateSchema,
       responses: {
         200: moduleResponseSchema,
+        400: errorSchemas.validation,
+        401: errorSchemas.notFound,
+        404: errorSchemas.notFound,
+      },
+    },
     feedback: {
-      method: 'POST' as const,
-      path: '/api/modules/:id/feedback' as const,
+      method: "POST" as const,
+      path: "/api/modules/:id/feedback" as const,
       body: insertModuleFeedbackSchema.pick({ rating: true, comment: true }),
       responses: {
         201: z.object({
@@ -142,7 +137,6 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
-    }
   },
   budget: {
     get: {

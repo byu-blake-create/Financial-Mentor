@@ -1,7 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import type { InsertCategory, Module, UserProgress } from "@shared/schema";
-import { insertModuleFeedbackSchema, type InsertCategory } from "@shared/schema";
+import { insertModuleFeedbackSchema, type InsertCategory, type Module, type UserProgress } from "@shared/schema";
 import { storage } from "./storage";
 import { api, moduleProgressUpdateSchema } from "@shared/routes";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";

@@ -1,7 +1,3 @@
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useModule, useUpdateModuleProgress } from "@/hooks/use-modules";
-import { useRoute } from "wouter";
 import { useState } from "react";
 import { useModule, useSubmitModuleFeedback, useUpdateModuleProgress } from "@/hooks/use-modules";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,10 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Bookmark, Check, PlayCircle } from "lucide-react";
-import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, Bookmark, Check, PlayCircle } from "lucide-react";
 import { Link, useRoute } from "wouter";
 
 function getYouTubeEmbedUrl(url: string | null): string | null {
