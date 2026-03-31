@@ -6,13 +6,15 @@ import {
   BookOpen, 
   MessageSquare, 
   LogOut,
-  UserCircle
+  UserCircle,
+  Target,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Budget", href: "/budget", icon: PieChart },
+  { name: "Goals", href: "/goals", icon: Target },
   { name: "Modules", href: "/modules", icon: BookOpen },
   { name: "Chat Expert", href: "/chat", icon: MessageSquare },
 ];
@@ -80,6 +82,14 @@ export function Sidebar() {
               {user?.email || 'user@example.com'}
             </p>
           </div>
+          <Link
+            href="/edit-profile"
+            aria-label="Edit profile"
+            title="Edit profile"
+            className="rounded-lg p-2 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+          >
+            <UserCircle className="h-5 w-5" />
+          </Link>
           <button 
             onClick={() => logout()}
             className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"

@@ -38,7 +38,7 @@ const DEFAULT_COLORS = [
 ];
 
 export default function Budget() {
-  const { data: budget, isLoading } = useBudget();
+  const { data: budget, isLoading, isError, error } = useBudget();
   const updateBudget = useUpdateBudget();
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
@@ -62,20 +62,38 @@ export default function Budget() {
     return <BudgetSkeleton />;
   }
 
+  if (isError) {
+    return (
+      <div className="p-8 space-y-2">
+        <p className="font-medium text-destructive">Could not load your budget.</p>
+        <p className="text-sm text-muted-foreground">
+          {error instanceof Error ? error.message : "Check that your database has the latest schema (see schema.sql for budget_categories columns) and try again."}
+        </p>
+      </div>
+    );
+  }
+
   if (!budget) {
     return (
-      <div className="p-8">
-        <p className="text-muted-foreground">No budget found. Please create one.</p>
+      <div className="p-8 space-y-2">
+        <p className="text-muted-foreground">No budget found for your account.</p>
+        <p className="text-sm text-muted-foreground">
+          Add a row in the <code className="text-xs bg-muted px-1 rounded">budget</code> table whose{" "}
+          <code className="text-xs bg-muted px-1 rounded">user_id</code> matches your logged-in user (same as{" "}
+          <code className="text-xs bg-muted px-1 rounded">users.user_id</code>).
+        </p>
       </div>
     );
   }
 
   // Prepare data for the pie chart
-  const chartData = budget.categories.map(cat => ({
-    name: cat.name,
-    value: parseFloat(cat.allocatedAmount),
-    color: cat.color || "#10b981"
-  }));
+  const chartData = budget.categories
+    .map((cat) => ({
+      name: cat.name,
+      value: parseFloat(cat.allocatedAmount),
+      color: cat.color || "#10b981",
+    }))
+    .filter((d) => d.value > 0);
 
   const totalAllocated = chartData.reduce((acc, curr) => acc + curr.value, 0);
   const budgetTotalAmount = parseFloat(budget.totalAmount);

@@ -1,8 +1,11 @@
 import { useRoute } from "wouter";
-import { useModule } from "@/hooks/use-modules";
+import { useModule, useUpdateModuleProgress } from "@/hooks/use-modules";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, PlayCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, Bookmark, Check, PlayCircle } from "lucide-react";
 import { Link } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 // Convert YouTube URL to embed URL
 function getYouTubeEmbedUrl(url: string | null): string | null {
@@ -33,6 +36,8 @@ export default function ModuleDetail() {
   const [, params] = useRoute("/modules/:id");
   const moduleId = params ? parseInt(params.id, 10) : null;
   const { data: module, isLoading, error } = useModule(moduleId || 0);
+  const updateProgress = useUpdateModuleProgress();
+  const { toast } = useToast();
 
   if (isLoading) {
     return <ModuleDetailSkeleton />;
@@ -54,6 +59,21 @@ export default function ModuleDetail() {
 
   const embedUrl = getYouTubeEmbedUrl(module.videoUrl);
 
+  const progressPending =
+    updateProgress.isPending && updateProgress.variables?.moduleId === module.id;
+
+  const saveProgress = async (patch: { watched?: boolean; watchLater?: boolean }) => {
+    try {
+      await updateProgress.mutateAsync({ moduleId: module.id, ...patch });
+    } catch (e: unknown) {
+      toast({
+        title: "Could not save",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <Link href="/modules" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
@@ -70,6 +90,28 @@ export default function ModuleDetail() {
           <p className="text-lg text-muted-foreground leading-relaxed">
             {module.description}
           </p>
+          <div className="flex flex-wrap gap-3 mt-6">
+            <Button
+              type="button"
+              variant={module.watched ? "secondary" : "default"}
+              disabled={progressPending}
+              onClick={() => saveProgress({ watched: !module.watched })}
+              className="gap-2"
+            >
+              <Check className="h-4 w-4" />
+              {module.watched ? "Mark as not watched" : "Mark as watched"}
+            </Button>
+            <Button
+              type="button"
+              variant={module.watchLater ? "secondary" : "outline"}
+              disabled={progressPending}
+              onClick={() => saveProgress({ watchLater: !module.watchLater })}
+              className="gap-2"
+            >
+              <Bookmark className={cn("h-4 w-4", module.watchLater && "fill-current")} />
+              {module.watchLater ? "Remove from watch later" : "Watch later"}
+            </Button>
+          </div>
         </div>
 
         <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
