@@ -2,6 +2,16 @@ import { z } from "zod";
 import {
   budgets,
   categories,
+import { z } from 'zod';
+import { 
+  insertBudgetSchema, 
+  insertCategorySchema, 
+  insertTransactionSchema, 
+  insertModuleFeedbackSchema,
+  budgets, 
+  categories, 
+  transactions, 
+  modules,
   goals,
   modules,
   transactions,
@@ -113,11 +123,26 @@ export const api = {
       body: moduleProgressUpdateSchema,
       responses: {
         200: moduleResponseSchema,
+    feedback: {
+      method: 'POST' as const,
+      path: '/api/modules/:id/feedback' as const,
+      body: insertModuleFeedbackSchema.pick({ rating: true, comment: true }),
+      responses: {
+        201: z.object({
+          id: z.number(),
+          userId: z.number(),
+          moduleId: z.number(),
+          rating: z.number(),
+          comment: z.string().nullable(),
+          createdAt: z.date().nullable(),
+          updatedAt: z.date().nullable(),
+        }),
         400: errorSchemas.validation,
         401: errorSchemas.notFound,
         404: errorSchemas.notFound,
       },
     },
+    }
   },
   budget: {
     get: {
