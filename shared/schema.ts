@@ -53,6 +53,7 @@ export const userProgress = pgTable("user_progress", {
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   moduleId: integer("module_id").notNull().references(() => modules.id, { onDelete: "cascade" }),
   status: boolean("status").default(false).notNull(),
+  watchLater: boolean("watch_later").default(false).notNull(),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

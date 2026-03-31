@@ -22,20 +22,57 @@ export const errorSchemas = {
   }),
 };
 
+export const moduleResponseSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  description: z.string(),
+  videoUrl: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  category: z.string(),
+  watched: z.boolean(),
+  watchLater: z.boolean(),
+  completedAt: z.string().nullable(),
+  createdAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+});
+
+export const modulesListResponseSchema = z.object({
+  keepLearning: z.array(moduleResponseSchema),
+  suggested: z.array(moduleResponseSchema),
+  popular: z.array(moduleResponseSchema),
+  all: z.array(moduleResponseSchema),
+});
+
+export const dashboardResponseSchema = z.object({
+  budget: z.custom<typeof budgets.$inferSelect & { categories: typeof categories.$inferSelect[] }>().nullable(),
+  recentTransactions: z.array(z.custom<typeof transactions.$inferSelect>()),
+  modules: z.object({
+    upNext: z.array(moduleResponseSchema),
+    watchlist: z.array(moduleResponseSchema),
+  }),
+});
+
+export const moduleProgressUpdateSchema = z
+  .object({
+    watched: z.boolean().optional(),
+    watchLater: z.boolean().optional(),
+  })
+  .refine((value) => value.watched !== undefined || value.watchLater !== undefined, {
+    message: "At least one progress field must be provided",
+  });
+
+export type ModuleResponse = z.infer<typeof moduleResponseSchema>;
+export type ModulesListResponse = z.infer<typeof modulesListResponseSchema>;
+export type DashboardResponse = z.infer<typeof dashboardResponseSchema>;
+export type ModuleProgressUpdateRequest = z.infer<typeof moduleProgressUpdateSchema>;
+
 export const api = {
   dashboard: {
     get: {
       method: 'GET' as const,
       path: '/api/dashboard' as const,
       responses: {
-        200: z.object({
-          budget: z.custom<typeof budgets.$inferSelect & { categories: typeof categories.$inferSelect[] }>().nullable(),
-          recentTransactions: z.array(z.custom<typeof transactions.$inferSelect>()),
-          modules: z.object({
-            recent: z.array(z.custom<typeof modules.$inferSelect>()),
-            recommended: z.array(z.custom<typeof modules.$inferSelect>()),
-          })
-        }),
+        200: dashboardResponseSchema,
       },
     },
   },
@@ -44,18 +81,25 @@ export const api = {
       method: 'GET' as const,
       path: '/api/modules' as const,
       responses: {
-        200: z.object({
-          keepLearning: z.array(z.custom<typeof modules.$inferSelect>()),
-          suggested: z.array(z.custom<typeof modules.$inferSelect>()),
-          popular: z.array(z.custom<typeof modules.$inferSelect>()),
-        }),
+        200: modulesListResponseSchema,
       },
     },
     get: {
       method: 'GET' as const,
       path: '/api/modules/:id' as const,
       responses: {
-        200: z.custom<typeof modules.$inferSelect>(),
+        200: moduleResponseSchema,
+        404: errorSchemas.notFound,
+      },
+    },
+    progress: {
+      method: 'PATCH' as const,
+      path: '/api/modules/:id/progress' as const,
+      body: moduleProgressUpdateSchema,
+      responses: {
+        200: moduleResponseSchema,
+        400: errorSchemas.validation,
+        401: errorSchemas.notFound,
         404: errorSchemas.notFound,
       },
     }

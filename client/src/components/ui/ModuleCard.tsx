@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
-import { PlayCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Bookmark, CheckCircle2, PlayCircle } from "lucide-react";
 import { Link } from "wouter";
 
 interface ModuleCardProps {
@@ -8,10 +9,21 @@ interface ModuleCardProps {
   category: string;
   duration?: string;
   imageUrl?: string | null;
+  watched?: boolean;
+  watchLater?: boolean;
   className?: string;
 }
 
-export function ModuleCard({ id, title, category, duration = "5 min", imageUrl, className }: ModuleCardProps) {
+export function ModuleCard({
+  id,
+  title,
+  category,
+  duration = "5 min",
+  imageUrl,
+  watched = false,
+  watchLater = false,
+  className,
+}: ModuleCardProps) {
   return (
     <Link href={`/modules/${id}`}>
       <div className={cn("group cursor-pointer min-w-[280px]", className)}>
@@ -38,6 +50,22 @@ export function ModuleCard({ id, title, category, duration = "5 min", imageUrl, 
           <h4 className="font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-tight">
             {title}
           </h4>
+          {(watched || watchLater) && (
+            <div className="mt-3 flex items-center gap-2">
+              {watched && (
+                <Badge variant="secondary" className="gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Watched
+                </Badge>
+              )}
+              {watchLater && !watched && (
+                <Badge variant="outline" className="gap-1">
+                  <Bookmark className="w-3 h-3" />
+                  Watchlist
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </Link>

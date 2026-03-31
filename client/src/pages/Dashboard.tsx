@@ -41,7 +41,7 @@ export default function Dashboard() {
           Welcome back, {user?.firstName || 'Friend'}!
         </h1>
         <p className="text-muted-foreground">
-          Here's what's happening with your finances today.
+          Here's what's happening with your finances and learning today.
         </p>
       </div>
 
@@ -120,20 +120,45 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Middle Section: Modules Grid */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold font-display">Continue Learning</h2>
-          <Link href="/modules" className="text-sm font-medium text-primary hover:underline">View All</Link>
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...data.modules.recent, ...data.modules.recommended]
-            .slice(0, 4)
-            .map((module) => (
-              <ModuleCard key={module.id} {...module} />
-            ))}
-        </div>
+      {/* Middle Section: Learning Progress */}
+      <div className="space-y-8">
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold font-display">Up Next</h2>
+            <Link href="/modules" className="text-sm font-medium text-primary hover:underline">View All</Link>
+          </div>
+
+          {data.modules.upNext.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+              {data.modules.upNext.map((module) => (
+                <ModuleCard key={module.id} {...module} />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-card rounded-2xl border shadow-sm p-6 text-sm text-muted-foreground">
+              You’ve finished every module currently available.
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold font-display">Watchlist</h2>
+            <Link href="/modules" className="text-sm font-medium text-primary hover:underline">Browse Modules</Link>
+          </div>
+
+          {data.modules.watchlist.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+              {data.modules.watchlist.map((module) => (
+                <ModuleCard key={module.id} {...module} />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-card rounded-2xl border shadow-sm p-6 text-sm text-muted-foreground">
+              Save modules for later from any module detail page to build your watchlist.
+            </div>
+          )}
+        </section>
       </div>
 
       {/* Bottom Section: Recent Transactions */}
@@ -144,33 +169,37 @@ export default function Dashboard() {
         </div>
         
         <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-          {data.recentTransactions.map((tx, index) => (
-            <div 
-              key={tx.id} 
-              className={`flex items-center justify-between p-4 hover:bg-muted/30 transition-colors ${
-                index !== data.recentTransactions.length - 1 ? 'border-b' : ''
-              }`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                  {tx.description.toLowerCase().includes('shopping') ? (
-                    <ShoppingBag className="w-5 h-5" />
-                  ) : tx.description.toLowerCase().includes('transfer') ? (
-                    <Wallet className="w-5 h-5" />
-                  ) : (
-                    <CreditCard className="w-5 h-5" />
-                  )}
+          {data.recentTransactions.map((tx, index) => {
+            const description = tx.description ?? "Transaction";
+
+            return (
+              <div 
+                key={tx.id} 
+                className={`flex items-center justify-between p-4 hover:bg-muted/30 transition-colors ${
+                  index !== data.recentTransactions.length - 1 ? 'border-b' : ''
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                    {description.toLowerCase().includes('shopping') ? (
+                      <ShoppingBag className="w-5 h-5" />
+                    ) : description.toLowerCase().includes('transfer') ? (
+                      <Wallet className="w-5 h-5" />
+                    ) : (
+                      <CreditCard className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground">{description}</p>
+                    <p className="text-xs text-muted-foreground">{format(new Date(tx.date), 'MMM d, yyyy')}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-foreground">{tx.description}</p>
-                  <p className="text-xs text-muted-foreground">{format(new Date(tx.date), 'MMM d, yyyy')}</p>
-                </div>
+                <span className="font-mono font-medium text-foreground">
+                  -${parseFloat(tx.amount).toFixed(2)}
+                </span>
               </div>
-              <span className="font-mono font-medium text-foreground">
-                -${parseFloat(tx.amount).toFixed(2)}
-              </span>
-            </div>
-          ))}
+            );
+          })}
           
           {data.recentTransactions.length === 0 && (
             <div className="p-8 text-center text-muted-foreground">

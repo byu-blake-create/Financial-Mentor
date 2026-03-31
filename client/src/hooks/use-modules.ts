@@ -1,21 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
-import { api, buildUrl } from "@shared/routes";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  api,
+  buildUrl,
+  type ModuleProgressUpdateRequest,
+  type ModuleResponse,
+  type ModulesListResponse,
+} from "@shared/routes";
 
-export interface Module {
-  id: number;
-  title: string;
-  description: string;
-  videoUrl: string | null;
-  imageUrl: string | null;
-  category: string;
-}
-
-export interface ModulesListResponse {
-  keepLearning: Module[];
-  suggested: Module[];
-  popular: Module[];
-  all: Module[];
-}
+export type LearningModule = ModuleResponse;
 
 export function useModules() {
   return useQuery({
@@ -35,8 +27,31 @@ export function useModule(id: number) {
       const url = buildUrl(api.modules.get.path, { id });
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch module");
-      return await res.json() as Module;
+      return await res.json() as LearningModule;
     },
     enabled: !!id,
+  });
+}
+
+export function useUpdateModuleProgress(id: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (updates: ModuleProgressUpdateRequest) => {
+      const url = buildUrl(api.modules.progress.path, { id });
+      const res = await fetch(url, {
+        method: api.modules.progress.method,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error("Failed to update module progress");
+      return await res.json() as LearningModule;
+    },
+    onSuccess: (updatedModule) => {
+      queryClient.setQueryData([api.modules.get.path, id], updatedModule);
+      queryClient.invalidateQueries({ queryKey: [api.modules.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.dashboard.get.path] });
+    },
   });
 }

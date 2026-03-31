@@ -1,7 +1,10 @@
 import { useRoute } from "wouter";
-import { useModule } from "@/hooks/use-modules";
+import { useModule, useUpdateModuleProgress } from "@/hooks/use-modules";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, PlayCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Bookmark, CheckCircle2, PlayCircle } from "lucide-react";
 import { Link } from "wouter";
 
 // Convert YouTube URL to embed URL
@@ -33,6 +36,8 @@ export default function ModuleDetail() {
   const [, params] = useRoute("/modules/:id");
   const moduleId = params ? parseInt(params.id, 10) : null;
   const { data: module, isLoading, error } = useModule(moduleId || 0);
+  const updateProgress = useUpdateModuleProgress(moduleId || 0);
+  const { toast } = useToast();
 
   if (isLoading) {
     return <ModuleDetailSkeleton />;
@@ -52,7 +57,38 @@ export default function ModuleDetail() {
     );
   }
 
-  const embedUrl = getYouTubeEmbedUrl(module.videoUrl);
+  const currentModule = module;
+  const embedUrl = getYouTubeEmbedUrl(currentModule.videoUrl);
+  const isUpdating = updateProgress.isPending;
+
+  async function handleToggleWatched() {
+    try {
+      await updateProgress.mutateAsync({
+        watched: !currentModule.watched,
+        watchLater: currentModule.watched ? currentModule.watchLater : false,
+      });
+    } catch {
+      toast({
+        title: "Could not update module",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleToggleWatchlist() {
+    try {
+      await updateProgress.mutateAsync({
+        watchLater: !currentModule.watchLater,
+      });
+    } catch {
+      toast({
+        title: "Could not update watchlist",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    }
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -63,13 +99,47 @@ export default function ModuleDetail() {
 
       <div className="space-y-6">
         <div>
-          <div className="text-xs font-semibold text-primary mb-2 uppercase tracking-wider">
-            {module.category}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="text-xs font-semibold text-primary uppercase tracking-wider">
+              {module.category}
+            </div>
+            {module.watched && (
+              <Badge variant="secondary" className="gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                Watched
+              </Badge>
+            )}
+            {module.watchLater && !module.watched && (
+              <Badge variant="outline" className="gap-1">
+                <Bookmark className="w-3 h-3" />
+                Watchlist
+              </Badge>
+            )}
           </div>
           <h1 className="text-4xl font-bold font-display mb-4">{module.title}</h1>
           <p className="text-lg text-muted-foreground leading-relaxed">
             {module.description}
           </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button
+              type="button"
+              variant={module.watched ? "outline" : "default"}
+              onClick={handleToggleWatched}
+              disabled={isUpdating}
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              {module.watched ? "Mark Unwatched" : "Mark Watched"}
+            </Button>
+            <Button
+              type="button"
+              variant={module.watchLater ? "secondary" : "outline"}
+              onClick={handleToggleWatchlist}
+              disabled={isUpdating}
+            >
+              <Bookmark className="w-4 h-4" />
+              {module.watchLater ? "Remove From Watchlist" : "Add To Watchlist"}
+            </Button>
+          </div>
         </div>
 
         <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">

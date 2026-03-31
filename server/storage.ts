@@ -3,10 +3,12 @@ import {
   type Category,
   type Transaction,
   type Module,
+  type UserProgress,
   type InsertBudget,
   type InsertCategory,
   type InsertTransaction,
   type InsertModule,
+  type InsertUserProgress,
 } from "@shared/schema";
 import { supabase } from "./db";
 
@@ -141,6 +143,45 @@ function moduleToRow(insertModule: Partial<InsertModule>) {
   };
 }
 
+type UserProgressRow = {
+  progress_id: number;
+  user_id: number;
+  module_id: number;
+  status: boolean;
+  watch_later: boolean;
+  completed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function userProgressFromRow(row: UserProgressRow): UserProgress {
+  return {
+    id: row.progress_id,
+    userId: row.user_id,
+    moduleId: row.module_id,
+    status: row.status,
+    watchLater: row.watch_later,
+    completedAt: toDate(row.completed_at),
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  };
+}
+
+function userProgressToRow(insertProgress: Partial<InsertUserProgress>) {
+  return {
+    user_id: insertProgress.userId,
+    module_id: insertProgress.moduleId,
+    status: insertProgress.status,
+    watch_later: insertProgress.watchLater,
+    completed_at: insertProgress.completedAt
+      ? (insertProgress.completedAt as any).toISOString?.() ?? insertProgress.completedAt
+      : insertProgress.completedAt === null
+        ? null
+        : undefined,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 export interface IStorage extends IAuthStorage, IChatStorage {
   // Budget
   getUserBudget(userId: number): Promise<Budget | undefined>;
@@ -161,6 +202,15 @@ export interface IStorage extends IAuthStorage, IChatStorage {
   getModules(): Promise<Module[]>;
   getModule(id: number): Promise<Module | undefined>;
   createModule(module: InsertModule): Promise<Module>;
+
+  // Module progress
+  getUserModuleProgress(userId: number): Promise<UserProgress[]>;
+  getUserModuleProgressEntry(userId: number, moduleId: number): Promise<UserProgress | undefined>;
+  upsertUserModuleProgress(
+    userId: number,
+    moduleId: number,
+    updates: { watched?: boolean; watchLater?: boolean }
+  ): Promise<UserProgress>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -286,6 +336,58 @@ export class DatabaseStorage implements IStorage {
     const { data, error } = await supabase.from("modules").insert(moduleToRow(insertModule)).select("*").single();
     if (error) throw error;
     return moduleFromRow(data as ModuleRow);
+  }
+
+  async getUserModuleProgress(userId: number): Promise<UserProgress[]> {
+    const { data, error } = await supabase
+      .from("user_progress")
+      .select("*")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((row) => userProgressFromRow(row as UserProgressRow));
+  }
+
+  async getUserModuleProgressEntry(userId: number, moduleId: number): Promise<UserProgress | undefined> {
+    const { data, error } = await supabase
+      .from("user_progress")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("module_id", moduleId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? userProgressFromRow(data as UserProgressRow) : undefined;
+  }
+
+  async upsertUserModuleProgress(
+    userId: number,
+    moduleId: number,
+    updates: { watched?: boolean; watchLater?: boolean }
+  ): Promise<UserProgress> {
+    const existing = await this.getUserModuleProgressEntry(userId, moduleId);
+    const watched = updates.watched ?? existing?.status ?? false;
+    const watchLater = updates.watchLater ?? existing?.watchLater ?? false;
+    const completedAt =
+      watched
+        ? existing?.completedAt ?? new Date()
+        : null;
+
+    const { data, error } = await supabase
+      .from("user_progress")
+      .upsert(
+        userProgressToRow({
+          userId,
+          moduleId,
+          status: watched,
+          watchLater,
+          completedAt,
+        }),
+        { onConflict: "user_id,module_id" }
+      )
+      .select("*")
+      .single();
+    if (error) throw error;
+    return userProgressFromRow(data as UserProgressRow);
   }
 }
 
