@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
-import { useFinancialGoals } from "@/hooks/use-financial-goals";
+import { useFinancialGoals, type ActiveGoal } from "@/hooks/use-financial-goals";
 import type { PresetGoalDefinition } from "@/lib/financial-goals-data";
 import {
   GOAL_CATEGORIES,
@@ -29,22 +29,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Flame, Target, Sparkles, Filter } from "lucide-react";
+import { Target, Filter } from "lucide-react";
 export default function FinancialGoals() {
   const { user } = useAuth();
   const userId = user?.id;
 
   const {
     goals,
-    streakDays,
     hydrated,
     addPresetGoal,
     addCustomGoal,
     updateSaved,
+    updateGoalDetails,
     removeGoal,
-    stats,
   } = useFinancialGoals(userId);
 
   const [filter, setFilter] = useState<"all" | GoalCategoryId>("all");
@@ -57,6 +55,12 @@ export default function FinancialGoals() {
   const [customTarget, setCustomTarget] = useState("");
   const [customCategory, setCustomCategory] = useState<GoalCategoryId | "">("");
   const [customDeadline, setCustomDeadline] = useState("");
+
+  const [editGoal, setEditGoal] = useState<ActiveGoal | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editTarget, setEditTarget] = useState("");
+  const [editCategory, setEditCategory] = useState<GoalCategoryId | "">("");
+  const [editDeadline, setEditDeadline] = useState("");
 
   const filteredPresets = useMemo(() => {
     if (filter === "all") return PRESET_GOALS;
@@ -130,6 +134,66 @@ export default function FinancialGoals() {
     setCustomDeadline("");
   };
 
+  const openEditGoal = (goal: ActiveGoal) => {
+    setEditGoal(goal);
+    setEditTitle(goal.title);
+    setEditTarget(String(goal.targetAmount));
+    setEditCategory(goal.categoryId ?? "");
+    setEditDeadline(goal.deadline ? new Date(goal.deadline).toISOString().slice(0, 10) : "");
+  };
+
+  const closeEditDialog = () => {
+    setEditGoal(null);
+    setEditTitle("");
+    setEditTarget("");
+    setEditCategory("");
+    setEditDeadline("");
+  };
+
+  const submitEdit = () => {
+    if (!editGoal) return;
+    const title = editTitle.trim();
+    const t = parseFloat(editTarget);
+
+    if (!title) {
+      toast({ title: "Name your goal", description: "Add a short title.", variant: "destructive" });
+      return;
+    }
+
+    if (!Number.isFinite(t) || t <= 0) {
+      toast({
+        title: "Set a target amount",
+        description: "Use a positive target amount.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const deadlineIso = editDeadline
+      ? new Date(editDeadline + "T12:00:00").toISOString()
+      : null;
+
+    const ok = updateGoalDetails({
+      goalId: editGoal.id,
+      title,
+      targetAmount: t,
+      deadline: deadlineIso,
+      categoryId: editCategory || undefined,
+    });
+
+    if (!ok) {
+      toast({
+        title: "Could not update goal",
+        description: "Try opening the goal again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "Goal updated", description: "Your changes have been saved." });
+    closeEditDialog();
+  };
+
   const isPresetActive = (id: string) =>
     goals.some((g) => g.kind === "preset" && g.presetId === id);
 
@@ -144,27 +208,14 @@ export default function FinancialGoals() {
   }
 
   return (
-    <div className="space-y-10 max-w-5xl mx-auto pb-8 animate-in fade-in duration-500">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant="secondary"
-            className="gap-1.5 pl-2 pr-2.5 py-1 font-semibold bg-orange-500/15 text-orange-900 dark:text-orange-100 border-orange-500/20"
-          >
-            <Flame className="h-3.5 w-3.5" />
-            {streakDays > 0 ? `${streakDays}-day streak` : "Start your streak"}
-          </Badge>
-          <Badge variant="outline" className="gap-1 font-medium">
-            <Sparkles className="h-3.5 w-3.5" />
-            {stats.completedCount} completed
-          </Badge>
-        </div>
+    <div className="space-y-8 max-w-5xl mx-auto pb-8">
+      <header className="space-y-2">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold font-display tracking-tight">
-            Financial goals
+          <h1 className="text-3xl font-bold font-display tracking-tight">
+            Goals
           </h1>
-          <p className="text-muted-foreground mt-1 max-w-2xl">
-            Pick a path, name your target, and watch the bar move. Small wins beat perfect plans.
+          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+            Build a goal, keep progress visible, and adjust anytime.
           </p>
         </div>
       </header>
@@ -174,10 +225,10 @@ export default function FinancialGoals() {
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <h2 className="text-xl font-bold font-display flex items-center gap-2">
-              <Target className="h-5 w-5 text-primary" />
+              <Target className="h-4 w-4 text-primary" />
               Your active goals
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground mt-1">
               {goals.length === 0
                 ? "Nothing here yet — add a goal below."
                 : `${goals.length} goal${goals.length === 1 ? "" : "s"} in motion`}
@@ -192,11 +243,11 @@ export default function FinancialGoals() {
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border-2 border-dashed border-primary/25 bg-primary/5 p-8 text-center"
+            className="rounded-xl border border-dashed p-8 text-center"
           >
             <p className="font-semibold text-foreground">Ready when you are</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-              Choose a starter goal from the library or create your own. Progress saves on this device.
+              Choose a starter goal from the library or create your own.
             </p>
           </motion.div>
         ) : (
@@ -206,6 +257,7 @@ export default function FinancialGoals() {
                 key={g.id}
                 goal={g}
                 onSavedChange={(v) => updateSaved(g.id, v)}
+                onEdit={() => openEditGoal(g)}
                 onRemove={() => {
                   removeGoal(g.id);
                   toast({ title: "Goal removed" });
@@ -221,9 +273,9 @@ export default function FinancialGoals() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-bold font-display">Goal library</h2>
-            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-              <Filter className="h-4 w-4" />
-              Filter by category — tap a card to add
+            <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
+              <Filter className="h-3.5 w-3.5" />
+              Filter by category and add what matters most right now.
             </p>
           </div>
         </div>
@@ -390,6 +442,80 @@ export default function FinancialGoals() {
             </Button>
             <Button onClick={submitCustom} className="rounded-xl">
               Save goal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit goal dialog */}
+      <Dialog open={!!editGoal} onOpenChange={(o) => !o && closeEditDialog()}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Edit goal</DialogTitle>
+            <DialogDescription>
+              Update the name, target, category, or deadline for this goal.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-title">Goal name</Label>
+              <Input
+                id="edit-title"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-target">
+                Target amount {editGoal?.unit === "usd" ? "($)" : `(${editGoal?.unit})`}
+              </Label>
+              <Input
+                id="edit-target"
+                type="number"
+                min={1}
+                step={1}
+                value={editTarget}
+                onChange={(e) => setEditTarget(e.target.value)}
+                className="tabular-nums"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Category (optional)</Label>
+              <Select
+                value={editCategory || "none"}
+                onValueChange={(v) =>
+                  setEditCategory(v === "none" ? "" : (v as GoalCategoryId))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No category</SelectItem>
+                  {GOAL_CATEGORIES.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-deadline">Deadline (optional)</Label>
+              <Input
+                id="edit-deadline"
+                type="date"
+                value={editDeadline}
+                onChange={(e) => setEditDeadline(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={closeEditDialog}>
+              Cancel
+            </Button>
+            <Button onClick={submitEdit} className="rounded-xl">
+              Save changes
             </Button>
           </DialogFooter>
         </DialogContent>
