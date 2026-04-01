@@ -30,8 +30,8 @@ function redactSecrets(message: string): string {
 
 // Lazy initialization of OpenAI client
 function getOpenAIClient(): OpenAI {
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-  const openAIApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  const geminiApiKey = (process.env.GEMINI_API_KEY || "").trim();
+  const openAIApiKey = (process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "").trim();
   const apiKey = geminiApiKey || openAIApiKey;
 
   if (!apiKey) {
@@ -40,7 +40,7 @@ function getOpenAIClient(): OpenAI {
     );
   }
 
-  const baseURL = geminiApiKey
+  const baseURL = geminiApiKey.length > 0
     ? process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai"
     : process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
 
