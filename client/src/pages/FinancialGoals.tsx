@@ -45,7 +45,7 @@ export default function FinancialGoals() {
     removeGoal,
   } = useFinancialGoals(userId);
 
-  const [filter, setFilter] = useState<"all" | GoalCategoryId>("all");
+  const [filter, setFilter] = useState<"all" | GoalCategoryId>("education-career");
   const [presetDialog, setPresetDialog] = useState<PresetGoalDefinition | null>(null);
   const [presetTarget, setPresetTarget] = useState("");
   const [presetDeadline, setPresetDeadline] = useState("");
@@ -53,6 +53,7 @@ export default function FinancialGoals() {
   const [customOpen, setCustomOpen] = useState(false);
   const [customTitle, setCustomTitle] = useState("");
   const [customTarget, setCustomTarget] = useState("");
+  const [customUnit, setCustomUnit] = useState<"usd" | "days" | "weeks" | "none">("usd");
   const [customCategory, setCustomCategory] = useState<GoalCategoryId | "">("");
   const [customDeadline, setCustomDeadline] = useState("");
 
@@ -104,25 +105,30 @@ export default function FinancialGoals() {
 
   const submitCustom = () => {
     const title = customTitle.trim();
-    const t = parseFloat(customTarget);
     if (!title) {
       toast({ title: "Name your goal", description: "Add a short title.", variant: "destructive" });
       return;
     }
-    if (!Number.isFinite(t) || t <= 0) {
-      toast({
-        title: "Set a target amount",
-        description: "Use a positive dollar amount.",
-        variant: "destructive",
-      });
-      return;
+    let targetAmount = 0;
+    if (customUnit !== "none") {
+      const t = parseFloat(customTarget);
+      if (!Number.isFinite(t) || t <= 0) {
+        toast({
+          title: "Set a target",
+          description: customUnit === "usd" ? "Use a positive dollar amount." : "Enter a positive number.",
+          variant: "destructive",
+        });
+        return;
+      }
+      targetAmount = t;
     }
     const deadlineIso = customDeadline
       ? new Date(customDeadline + "T12:00:00").toISOString()
       : null;
     addCustomGoal({
       title,
-      targetAmount: t,
+      targetAmount,
+      unit: customUnit,
       deadline: deadlineIso,
       categoryId: customCategory || undefined,
     });
@@ -130,6 +136,7 @@ export default function FinancialGoals() {
     setCustomOpen(false);
     setCustomTitle("");
     setCustomTarget("");
+    setCustomUnit("usd");
     setCustomCategory("");
     setCustomDeadline("");
   };
@@ -153,20 +160,25 @@ export default function FinancialGoals() {
   const submitEdit = () => {
     if (!editGoal) return;
     const title = editTitle.trim();
-    const t = parseFloat(editTarget);
+    const isMilestoneEdit = editGoal.unit === "none";
 
     if (!title) {
       toast({ title: "Name your goal", description: "Add a short title.", variant: "destructive" });
       return;
     }
 
-    if (!Number.isFinite(t) || t <= 0) {
-      toast({
-        title: "Set a target amount",
-        description: "Use a positive target amount.",
-        variant: "destructive",
-      });
-      return;
+    let targetAmount = editGoal.targetAmount;
+    if (!isMilestoneEdit) {
+      const t = parseFloat(editTarget);
+      if (!Number.isFinite(t) || t <= 0) {
+        toast({
+          title: "Set a target amount",
+          description: "Use a positive target amount.",
+          variant: "destructive",
+        });
+        return;
+      }
+      targetAmount = t;
     }
 
     const deadlineIso = editDeadline
@@ -176,7 +188,7 @@ export default function FinancialGoals() {
     const ok = updateGoalDetails({
       goalId: editGoal.id,
       title,
-      targetAmount: t,
+      targetAmount,
       deadline: deadlineIso,
       categoryId: editCategory || undefined,
     });
@@ -379,7 +391,7 @@ export default function FinancialGoals() {
           <DialogHeader>
             <DialogTitle className="font-display text-xl">Create a custom goal</DialogTitle>
             <DialogDescription>
-              Name it, set a dollar target, and optionally pick a category or deadline.
+              Name it, optionally set a target, and pick a category or deadline.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -393,18 +405,39 @@ export default function FinancialGoals() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="custom-target">Target amount ($)</Label>
-              <Input
-                id="custom-target"
-                type="number"
-                min={1}
-                step={1}
-                placeholder="500"
-                value={customTarget}
-                onChange={(e) => setCustomTarget(e.target.value)}
-                className="tabular-nums"
-              />
+              <Label>Goal type</Label>
+              <Select
+                value={customUnit}
+                onValueChange={(v) => setCustomUnit(v as typeof customUnit)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="usd">Dollar amount ($)</SelectItem>
+                  <SelectItem value="days">Days</SelectItem>
+                  <SelectItem value="weeks">Weeks</SelectItem>
+                  <SelectItem value="none">No target (milestone)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {customUnit !== "none" && (
+              <div className="space-y-2">
+                <Label htmlFor="custom-target">
+                  {customUnit === "usd" ? "Target amount ($)" : customUnit === "days" ? "Target (days)" : "Target (weeks)"}
+                </Label>
+                <Input
+                  id="custom-target"
+                  type="number"
+                  min={1}
+                  step={1}
+                  placeholder={customUnit === "usd" ? "500" : "30"}
+                  value={customTarget}
+                  onChange={(e) => setCustomTarget(e.target.value)}
+                  className="tabular-nums"
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Category (optional)</Label>
               <Select
@@ -465,20 +498,22 @@ export default function FinancialGoals() {
                 onChange={(e) => setEditTitle(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-target">
-                Target amount {editGoal?.unit === "usd" ? "($)" : `(${editGoal?.unit})`}
-              </Label>
-              <Input
-                id="edit-target"
-                type="number"
-                min={1}
-                step={1}
-                value={editTarget}
-                onChange={(e) => setEditTarget(e.target.value)}
-                className="tabular-nums"
-              />
-            </div>
+            {editGoal?.unit !== "none" && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-target">
+                  {editGoal?.unit === "usd" ? "Target amount ($)" : editGoal?.unit === "days" ? "Target (days)" : "Target (weeks)"}
+                </Label>
+                <Input
+                  id="edit-target"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={editTarget}
+                  onChange={(e) => setEditTarget(e.target.value)}
+                  className="tabular-nums"
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Category (optional)</Label>
               <Select

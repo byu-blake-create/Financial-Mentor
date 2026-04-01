@@ -1,31 +1,9 @@
 import type { Express, Request, Response } from "express";
-import OpenAI from "openai";
+import OpenAI, { APIError } from "openai";
 import { chatStorage } from "./storage";
 import { isAuthenticated } from "../auth";
 
 const GEMINI_DEFAULT_MODELS = ["gemini-flash-latest", "gemini-2.5-flash"];
-
-const FINANCIAL_MENTOR_SYSTEM_PROMPT = `You are Prosper AI Expert: a warm, practical financial mentor/coach. Your purpose is to help users build healthier money habits, understand tradeoffs, and make clearer financial decisions—not to sell products or hype investments.
-
-**Stay in scope.** Focus on personal finance and money-adjacent life topics: budgeting, saving, debt payoff, credit, emergency funds, goals, spending awareness, negotiating bills, income and career choices as they affect finances, basic investing and retirement vocabulary, insurance concepts at a high level, and financial goal-setting. If someone asks about something clearly unrelated (coding homework, celebrity gossip, general trivia, medical diagnosis, politics as debate, etc.), do not answer that topic in depth. Briefly acknowledge it if appropriate, explain you are a financial mentor, and invite them to connect it to money if they can—or suggest a concrete financial topic to explore instead.
-
-**Steer conversations** toward actionable financial mentorship. If a question touches both finance and another domain, lead with the financial angle. If they are vague, ask short clarifying questions (goals, timeline, constraints) before giving detailed suggestions.
-
-**How you sound:** Supportive, direct, and educational. Use plain language; define jargon when you use it. Prefer specific steps, ranges, or frameworks over vague reassurance. Use Markdown (headings, lists, bold for key terms) when it improves readability.
-
-**Boundaries:** You are not a licensed financial, tax, legal, or investment adviser, and you do not have access to their private accounts unless they paste details. Do not pretend to know regulations for every country—give general principles and suggest verifying locally. Do not guarantee returns or outcomes. For high-stakes, legally sensitive, or very personalized situations, encourage consulting a qualified professional.
-
-**Privacy and safety:** Do not ask for or store unnecessary sensitive data (full account numbers, SSNs, passwords). If they share numbers, treat them hypothetically and remind them not to post secrets in chat.
-
-**Accuracy:** Do not fabricate rates, penalties, or product details. If you are uncertain, say so and describe how they could verify (official statement, IRS/supplier site, fee schedule).
-
-When off-topic requests appear, a helpful pattern is: one sentence boundary + one sentence bridge ("If money stress is behind that, we could look at…") + an open question.`;
-
-function buildChatCompletionMessages(
-  history: Array<{ role: "user" | "assistant"; content: string }>
-): OpenAI.Chat.ChatCompletionMessageParam[] {
-  return [{ role: "system", content: FINANCIAL_MENTOR_SYSTEM_PROMPT }, ...history];
-}
 
 // Lazy initialization of OpenAI client
 function getOpenAIClient(): OpenAI {
@@ -64,21 +42,40 @@ function getModelCandidates(): string[] {
 }
 
 function getErrorStatus(error: unknown): number | undefined {
+  if (error instanceof APIError && typeof error.status === "number") {
+    return error.status;
+  }
   const status = (error as { status?: unknown } | undefined)?.status;
   return typeof status === "number" ? status : undefined;
 }
 
 function shouldTryNextModel(error: unknown): boolean {
   const status = getErrorStatus(error);
-  return status === 400 || status === 403 || status === 404;
+  // Retry other models for model incompatibility + transient upstream issues.
+  return (
+    status === 400 ||
+    status === 403 ||
+    status === 404 ||
+    status === 429 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  );
 }
 
 function formatProviderError(error: unknown): string {
   const status = getErrorStatus(error);
-  const providerMessage =
-    (error as { error?: { message?: string } } | undefined)?.error?.message ||
-    (error as { message?: string } | undefined)?.message ||
-    "Unknown AI provider error";
+
+  let providerMessage = "Unknown AI provider error";
+  if (error instanceof APIError) {
+    const nested = error.error as { message?: string } | undefined;
+    providerMessage = (nested?.message || error.message || providerMessage).trim();
+  } else {
+    providerMessage =
+      (error as { error?: { message?: string } } | undefined)?.error?.message ||
+      (error as { message?: string } | undefined)?.message ||
+      providerMessage;
+  }
 
   if (status === 403) {
     return `${providerMessage}. Verify GEMINI_API_KEY permissions and try GEMINI_MODEL=gemini-flash-latest.`;
@@ -86,6 +83,18 @@ function formatProviderError(error: unknown): string {
 
   if (status === 404) {
     return `${providerMessage}. The configured model may be unavailable for this key.`;
+  }
+
+  if (status === 429) {
+    return `${providerMessage} Rate limited—wait a short time and try again.`;
+  }
+
+  if (status === 502 || status === 503 || status === 504) {
+    const hint =
+      providerMessage && providerMessage !== "Unknown AI provider error"
+        ? providerMessage
+        : "The AI service is temporarily unavailable.";
+    return `${hint} Please try again in a moment.`;
   }
 
   return providerMessage;
@@ -197,7 +206,7 @@ export function registerChatRoutes(app: Express): void {
         try {
           stream = await openai.chat.completions.create({
             model,
-            messages: buildChatCompletionMessages(chatMessages),
+            messages: chatMessages,
             stream: true,
             max_completion_tokens: 2048,
           });
@@ -249,10 +258,19 @@ export function registerChatRoutes(app: Express): void {
         res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
         res.end();
       } else {
-        const status = getErrorStatus(error) ?? 500;
-        res.status(status).json({ error: errorMessage });
+        const providerStatus = getErrorStatus(error);
+        // Return JSON even when upstream returns an empty body.
+        const httpStatus =
+          providerStatus === 502 || providerStatus === 503 || providerStatus === 504
+            ? 503
+            : providerStatus === 429
+              ? 429
+              : providerStatus ?? 500;
+        res.status(httpStatus).type("json").json({
+          error: errorMessage,
+          providerStatus: providerStatus ?? null,
+        });
       }
     }
   });
 }
-
