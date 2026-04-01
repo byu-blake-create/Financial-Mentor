@@ -31,7 +31,7 @@ export function Sidebar() {
             <PieChart className="h-6 w-6 text-white" />
           </div>
           <span className="text-xl font-bold tracking-tight text-foreground font-display">
-            My Financial Mentor
+            Prosper
           </span>
         </div>
       </div>
@@ -104,7 +104,7 @@ export function Sidebar() {
 
 export function MobileHeader() {
   const [location] = useLocation();
-  const activePage = navigation.find(n => n.href === location)?.name || "My Financial Mentor";
+  const activePage = navigation.find(n => n.href === location)?.name || "Prosper";
 
   return (
     <div className="md:hidden flex h-16 items-center justify-between border-b px-4 bg-background sticky top-0 z-50">

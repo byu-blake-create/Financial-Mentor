@@ -91,7 +91,7 @@ export default function Login() {
               <PieChart className="h-6 w-6 text-white" />
             </div>
             <span className="text-xl font-bold tracking-tight font-display">
-              My Financial Mentor
+              Prosper
             </span>
           </motion.div>
 
