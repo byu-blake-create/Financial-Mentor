@@ -4,6 +4,7 @@ import { chatStorage } from "./storage";
 import { isAuthenticated } from "../auth";
 
 const GEMINI_DEFAULT_MODELS = ["gemini-flash-latest", "gemini-2.5-flash"];
+let didLogProviderSelection = false;
 
 function redactSecrets(message: string): string {
   const secrets = [
@@ -43,6 +44,13 @@ function getOpenAIClient(): OpenAI {
   const baseURL = geminiApiKey.length > 0
     ? process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai"
     : process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+
+  if (!didLogProviderSelection) {
+    didLogProviderSelection = true;
+    console.log(
+      `[chat] provider=${geminiApiKey.length > 0 ? "gemini" : "openai-compatible"} baseURL=${baseURL || "(default)"} model=${getModel()}`,
+    );
+  }
 
   return new OpenAI({
     apiKey,
