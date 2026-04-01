@@ -89,7 +89,7 @@ export default function EditProfileInformation() {
             <div className="h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
               <PieChart className="h-6 w-6 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-tight font-display">Prosper AI</span>
+            <span className="text-xl font-bold tracking-tight font-display">My Financial Mentor</span>
           </motion.div>
 
           <motion.h1

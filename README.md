@@ -1,8 +1,8 @@
-# Financial Mentor
+# My Financial Mentor
 
 ## App Summary
 
-Financial Mentor is a web app that helps college students (18–25) build basic financial confidence without needing prior budgeting knowledge. The primary user is independent (paying rent, buying groceries, managing subscriptions) but still learning how to plan spending and avoid overspending. The product combines a simple budgeting dashboard with guided learning modules so users can both **track** and **improve** their habits in one place. Users can view their monthly budget, categorize planned spending, and track active financial goals. The app also surfaces learning content (“modules”) to reinforce financial literacy alongside day-to-day money decisions. This repo includes the backend foundation (Supabase + API) needed to persist data and support continued development. 
+My Financial Mentor is a web app that helps college students (18–25) build basic financial confidence without needing prior budgeting knowledge. The primary user is independent (paying rent, buying groceries, managing subscriptions) but still learning how to plan spending and avoid overspending. The product combines a simple budgeting dashboard with guided learning modules so users can both **track** and **improve** their habits in one place. Users can view their monthly budget, categorize planned spending, and track active financial goals. The app also surfaces learning content (“modules”) to reinforce financial literacy alongside day-to-day money decisions. This repo includes the backend foundation (Supabase + API) needed to persist data and support continued development. 
 
 **Update:** The legacy Transactions page has been removed from the UI. The Dashboard now includes a **Goals preview** section that surfaces your active goals (from the Goals page). It also includes **Up Next** and **Watchlist** learning sections so users can keep track of unwatched modules and modules they saved for later. New accounts also automatically get a default budget row so the Budget page loads immediately.
 
@@ -45,7 +45,7 @@ Financial Mentor is a web app that helps college students (18–25) build basic 
 
 ## AI Chatbot
 
-The AI chatbot ("Prosper AI Expert") provides conversational financial coaching in the app's **Chat** page.
+The AI chatbot ("My Financial Mentor") provides conversational financial coaching in the app's **Chat** page.
 
 ### What it does
 
@@ -186,7 +186,7 @@ http://localhost:4000
 
 ## Deployment Update
 
-Financial Mentor is currently hosted on **Render** as a web service. We moved deployment to Render because this project uses a full **Express + Vite** setup rather than a static frontend only.
+My Financial Mentor is currently hosted on **Render** as a web service. We moved deployment to Render because this project uses a full **Express + Vite** setup rather than a static frontend only.
 
 ### Render Configuration
 
