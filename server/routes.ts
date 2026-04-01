@@ -1,7 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { insertModuleFeedbackSchema, type InsertCategory, type Module, type UserProgress } from "@shared/schema";
-import { storage } from "./storage";
+import {
+  insertModuleFeedbackSchema,
+  type InsertBudget,
+  type InsertCategory,
+  type Module,
+  type UserProgress,
+} from "@shared/schema";
+import { storage, DEFAULT_BUDGET_MONTHLY } from "./storage";
 import { api, moduleProgressUpdateSchema } from "@shared/routes";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { registerChatRoutes } from "./replit_integrations/chat";
@@ -292,14 +298,101 @@ export async function registerRoutes(
     return res.status(201).json(feedback);
   });
 
-  app.get(api.budget.get.path, isAuthenticated, async (req, res) => {
+  app.get("/api/budget/periods", isAuthenticated, async (req, res) => {
     const userId = getCurrentUserId(req);
-    
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const budget = await storage.ensureUserBudget(userId);
+    await storage.ensureUserBudget(userId);
+    const list = await storage.listUserBudgets(userId);
+    res.json({
+      periods: list.map((b) => ({
+        id: b.id,
+        userId: b.userId,
+        totalAmount:
+          b.monthlyLimit != null && b.monthlyLimit !== "" ? String(b.monthlyLimit) : "0",
+        period: b.date ? new Date(b.date).toISOString().slice(0, 10) : "",
+      })),
+    });
+  });
+
+  app.post("/api/budget/periods", isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { totalAmount, period } = req.body as {
+      totalAmount?: string | number;
+      period?: string;
+    };
+    const amount =
+      totalAmount != null && String(totalAmount).trim() !== ""
+        ? String(totalAmount)
+        : DEFAULT_BUDGET_MONTHLY;
+    const parsedDate = period ? new Date(period) : new Date();
+    const date =
+      parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : new Date();
+
+    const budget = await storage.createBudget({
+      userId,
+      monthlyLimit: amount,
+      weeklyLimit: "0",
+      date,
+    } as InsertBudget);
+
+    await storage.seedDefaultBudgetCategories(budget.id);
+    const categories = await storage.getCategories(budget.id);
+    res.status(201).json(toClientBudget(budget, categories));
+  });
+
+  app.delete("/api/budget/periods/:id", isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const budgetId = parseInt(String(req.params.id), 10);
+    if (isNaN(budgetId)) {
+      return res.status(400).json({ message: "Invalid budget period ID" });
+    }
+
+    const list = await storage.listUserBudgets(userId);
+    if (list.length <= 1) {
+      return res.status(400).json({ message: "You must keep at least one budget period" });
+    }
+
+    const target = await storage.getBudgetByIdForUser(budgetId, userId);
+    if (!target) {
+      return res.status(404).json({ message: "Budget period not found" });
+    }
+
+    await storage.deleteBudgetForUser(budgetId, userId);
+    res.json({ message: "Budget period deleted" });
+  });
+
+  app.get(api.budget.get.path, isAuthenticated, async (req, res) => {
+    const userId = getCurrentUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const rawId = (req.query as { budgetId?: string }).budgetId;
+    let budget;
+    if (rawId != null && String(rawId).trim() !== "") {
+      const budgetId = parseInt(String(rawId), 10);
+      if (isNaN(budgetId)) {
+        return res.status(400).json({ message: "Invalid budget ID" });
+      }
+      budget = await storage.getBudgetByIdForUser(budgetId, userId);
+      if (!budget) {
+        return res.status(404).json({ message: "Budget not found" });
+      }
+    } else {
+      budget = await storage.ensureUserBudget(userId);
+    }
 
     const categories = await storage.getCategories(budget.id);
     res.json(toClientBudget(budget, categories));
@@ -308,17 +401,30 @@ export async function registerRoutes(
   // Update budget
   app.put(api.budget.get.path, isAuthenticated, async (req, res) => {
     const userId = getCurrentUserId(req);
-    
+
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const budget = await storage.getUserBudget(userId);
-    if (!budget) {
-      return res.status(404).json({ message: "Budget not found" });
+    const bodyBudgetId = (req.body as { budgetId?: number | string })?.budgetId;
+    let budget;
+    if (bodyBudgetId != null && String(bodyBudgetId).trim() !== "") {
+      const budgetId = parseInt(String(bodyBudgetId), 10);
+      if (isNaN(budgetId)) {
+        return res.status(400).json({ message: "Invalid budget ID" });
+      }
+      budget = await storage.getBudgetByIdForUser(budgetId, userId);
+      if (!budget) {
+        return res.status(404).json({ message: "Budget not found" });
+      }
+    } else {
+      budget = await storage.getUserBudget(userId);
+      if (!budget) {
+        return res.status(404).json({ message: "Budget not found" });
+      }
     }
 
-    const { totalAmount, period } = req.body;
+    const { totalAmount, period } = req.body as { totalAmount?: string; period?: string };
     const parsedDate = period ? new Date(period) : null;
     const updatedBudget = await storage.updateBudget(budget.id, {
       monthlyLimit: totalAmount ? String(totalAmount) : undefined,
@@ -332,21 +438,30 @@ export async function registerRoutes(
   // Create category
   app.post("/api/budget/categories", isAuthenticated, async (req, res) => {
     const userId = getCurrentUserId(req);
-    
+
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const budget = await storage.getUserBudget(userId);
-    if (!budget) {
-      return res.status(404).json({ message: "Budget not found" });
-    }
-
-    const { name, allocatedAmount, color } = req.body as {
+    const { budgetId: bodyBudgetId, name, allocatedAmount, color } = req.body as {
+      budgetId?: number | string;
       name?: string;
       allocatedAmount?: string | number;
       color?: string;
     };
+    if (bodyBudgetId == null || String(bodyBudgetId).trim() === "") {
+      return res.status(400).json({ message: "budgetId is required" });
+    }
+    const budgetIdNum = parseInt(String(bodyBudgetId), 10);
+    if (isNaN(budgetIdNum)) {
+      return res.status(400).json({ message: "Invalid budgetId" });
+    }
+
+    const budget = await storage.getBudgetByIdForUser(budgetIdNum, userId);
+    if (!budget) {
+      return res.status(404).json({ message: "Budget not found" });
+    }
+
     if (!name) {
       return res.status(400).json({ message: "Name is required" });
     }
@@ -375,14 +490,12 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid category ID" });
     }
 
-    const budget = await storage.getUserBudget(userId);
-    if (!budget) {
-      return res.status(404).json({ message: "Budget not found" });
+    const existingCat = await storage.getCategoryById(categoryId);
+    if (!existingCat) {
+      return res.status(404).json({ message: "Category not found" });
     }
-
-    // Verify category belongs to user's budget
-    const categories = await storage.getCategories(budget.id);
-    if (!categories.find(c => c.id === categoryId)) {
+    const ownsBudget = await storage.getBudgetByIdForUser(existingCat.budgetId, userId);
+    if (!ownsBudget) {
       return res.status(404).json({ message: "Category not found" });
     }
 
@@ -407,7 +520,7 @@ export async function registerRoutes(
   // Delete category
   app.delete("/api/budget/categories/:id", isAuthenticated, async (req, res) => {
     const userId = getCurrentUserId(req);
-    
+
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -417,14 +530,12 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid category ID" });
     }
 
-    const budget = await storage.getUserBudget(userId);
-    if (!budget) {
-      return res.status(404).json({ message: "Budget not found" });
+    const existingCat = await storage.getCategoryById(categoryId);
+    if (!existingCat) {
+      return res.status(404).json({ message: "Category not found" });
     }
-
-    // Verify category belongs to user's budget
-    const categories = await storage.getCategories(budget.id);
-    if (!categories.find(c => c.id === categoryId)) {
+    const ownsBudget = await storage.getBudgetByIdForUser(existingCat.budgetId, userId);
+    if (!ownsBudget) {
       return res.status(404).json({ message: "Category not found" });
     }
 

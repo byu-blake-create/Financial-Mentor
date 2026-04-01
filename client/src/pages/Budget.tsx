@@ -1,7 +1,19 @@
-import { useState } from "react";
-import { useBudget, useUpdateBudget, useCreateCategory, useUpdateCategory, useDeleteCategory, type Category } from "@/hooks/use-budget";
+import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useBudget,
+  useBudgetPeriods,
+  useUpdateBudget,
+  useCreateBudgetPeriod,
+  useDeleteBudgetPeriod,
+  useCreateCategory,
+  useUpdateCategory,
+  useDeleteCategory,
+  BUDGET_PERIODS_QUERY_KEY,
+  type Category,
+} from "@/hooks/use-budget";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { AlertTriangle, TrendingUp, BookOpen, ArrowRight, Plus, Edit2, Trash2 } from "lucide-react";
+import { AlertTriangle, TrendingUp, BookOpen, ArrowRight, Plus, Edit2, Trash2, CalendarPlus } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,29 +34,79 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const DEFAULT_COLORS = [
-  "#3b82f6", // blue
-  "#eab308", // yellow
-  "#ef4444", // red
-  "#22c55e", // green
-  "#8b5cf6", // purple
-  "#f59e0b", // orange
-  "#06b6d4", // cyan
-  "#ec4899", // pink
+  "#3b82f6",
+  "#eab308",
+  "#ef4444",
+  "#22c55e",
+  "#8b5cf6",
+  "#f59e0b",
+  "#06b6d4",
+  "#ec4899",
 ];
 
+const SELECTED_BUDGET_KEY = "fm-selected-budget-id";
+
+function formatPeriodLabel(periodIso: string): string {
+  if (!periodIso) return "Period";
+  const normalized = periodIso.includes("T") ? periodIso : `${periodIso}T12:00:00`;
+  const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) return periodIso;
+  return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function currentYearMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function periodToMonthValue(period: string): string {
+  if (period.length >= 7) return period.slice(0, 7);
+  return currentYearMonth();
+}
+
 export default function Budget() {
-  const { data: budget, isLoading, isError, error } = useBudget();
+  const queryClient = useQueryClient();
+  const { data: periods, isLoading: periodsLoading, isError: periodsError, error: periodsErr } =
+    useBudgetPeriods();
+  const [selectedBudgetId, setSelectedBudgetId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!periods?.length) return;
+    const saved = localStorage.getItem(SELECTED_BUDGET_KEY);
+    const parsed = saved ? parseInt(saved, 10) : NaN;
+    const fromStorage = periods.find((p) => p.id === parsed);
+    setSelectedBudgetId(fromStorage?.id ?? periods[0].id);
+  }, [periods]);
+
+  const {
+    data: budget,
+    isLoading: budgetLoading,
+    isError: budgetError,
+    error: budgetErr,
+  } = useBudget(selectedBudgetId ?? undefined);
+
   const updateBudget = useUpdateBudget();
+  const createBudgetPeriod = useCreateBudgetPeriod();
+  const deleteBudgetPeriod = useDeleteBudgetPeriod();
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
 
   const [isEditBudgetOpen, setIsEditBudgetOpen] = useState(false);
+  const [isNewPeriodOpen, setIsNewPeriodOpen] = useState(false);
+  const [isDeletePeriodOpen, setIsDeletePeriodOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
   const [isDeleteCategoryOpen, setIsDeleteCategoryOpen] = useState(false);
@@ -52,11 +114,23 @@ export default function Budget() {
   const [deletingCategoryId, setDeletingCategoryId] = useState<number | null>(null);
 
   const [budgetTotal, setBudgetTotal] = useState("");
-  const [budgetPeriod, setBudgetPeriod] = useState("");
+  const [editPeriodMonth, setEditPeriodMonth] = useState(currentYearMonth());
+
+  const [newPeriodMonth, setNewPeriodMonth] = useState(currentYearMonth());
+  const [newPeriodTotal, setNewPeriodTotal] = useState("2000");
 
   const [categoryName, setCategoryName] = useState("");
   const [categoryAmount, setCategoryAmount] = useState("");
   const [categoryColor, setCategoryColor] = useState(DEFAULT_COLORS[0]);
+
+  const isLoading = periodsLoading || selectedBudgetId == null || budgetLoading;
+  const isError = periodsError || budgetError;
+  const error = periodsErr ?? budgetErr;
+
+  const persistSelection = (id: number) => {
+    setSelectedBudgetId(id);
+    localStorage.setItem(SELECTED_BUDGET_KEY, String(id));
+  };
 
   if (isLoading) {
     return <BudgetSkeleton />;
@@ -73,20 +147,14 @@ export default function Budget() {
     );
   }
 
-  if (!budget) {
+  if (!budget || !periods?.length) {
     return (
       <div className="p-8 space-y-2">
         <p className="text-muted-foreground">No budget found for your account.</p>
-        <p className="text-sm text-muted-foreground">
-          Add a row in the <code className="text-xs bg-muted px-1 rounded">budget</code> table whose{" "}
-          <code className="text-xs bg-muted px-1 rounded">user_id</code> matches your logged-in user (same as{" "}
-          <code className="text-xs bg-muted px-1 rounded">users.user_id</code>).
-        </p>
       </div>
     );
   }
 
-  // Prepare data for the pie chart
   const chartData = budget.categories
     .map((cat) => ({
       name: cat.name,
@@ -100,34 +168,76 @@ export default function Budget() {
   const isOverBudget = totalAllocated > budgetTotalAmount;
   const overageAmount = isOverBudget ? totalAllocated - budgetTotalAmount : 0;
   const remainingAmount = budgetTotalAmount - totalAllocated;
-  
-  // Add remaining category to chart if there's remaining budget
-  const chartDataWithRemaining = remainingAmount > 0 
-    ? [
-        ...chartData,
-        {
-          name: "Remaining",
-          value: remainingAmount,
-          color: "#e5e7eb" // Light gray for remaining
-        }
-      ]
-    : chartData;
+
+  const chartDataWithRemaining =
+    remainingAmount > 0
+      ? [
+          ...chartData,
+          {
+            name: "Remaining",
+            value: remainingAmount,
+            color: "#e5e7eb",
+          },
+        ]
+      : chartData;
 
   const handleEditBudget = () => {
     setBudgetTotal(budget.totalAmount);
-    setBudgetPeriod(budget.period);
+    setEditPeriodMonth(periodToMonthValue(budget.period));
     setIsEditBudgetOpen(true);
   };
 
   const handleSaveBudget = async () => {
     try {
       await updateBudget.mutateAsync({
+        budgetId: budget.id,
         totalAmount: budgetTotal,
-        period: budgetPeriod,
+        period: `${editPeriodMonth}-01`,
       });
       setIsEditBudgetOpen(false);
-    } catch (error) {
-      console.error("Failed to update budget:", error);
+    } catch (e) {
+      console.error("Failed to update budget:", e);
+    }
+  };
+
+  const handleOpenNewPeriod = () => {
+    setNewPeriodMonth(currentYearMonth());
+    setNewPeriodTotal("2000");
+    setIsNewPeriodOpen(true);
+  };
+
+  const handleSaveNewPeriod = async () => {
+    try {
+      const created = await createBudgetPeriod.mutateAsync({
+        totalAmount: newPeriodTotal,
+        period: `${newPeriodMonth}-01`,
+      });
+      persistSelection(created.id);
+      setIsNewPeriodOpen(false);
+    } catch (e) {
+      console.error("Failed to create budget period:", e);
+    }
+  };
+
+  const confirmDeletePeriod = async () => {
+    if (selectedBudgetId == null || periods.length <= 1) return;
+    try {
+      await deleteBudgetPeriod.mutateAsync(selectedBudgetId);
+      const list = await queryClient.fetchQuery({
+        queryKey: BUDGET_PERIODS_QUERY_KEY,
+        queryFn: async () => {
+          const res = await fetch("/api/budget/periods", { credentials: "include" });
+          if (!res.ok) throw new Error("Failed to refresh periods");
+          const data = (await res.json()) as { periods: { id: number }[] };
+          return data.periods;
+        },
+      });
+      if (list.length) {
+        persistSelection(list[0].id);
+      }
+      setIsDeletePeriodOpen(false);
+    } catch (e) {
+      console.error("Failed to delete budget period:", e);
     }
   };
 
@@ -141,6 +251,7 @@ export default function Budget() {
   const handleSaveCategory = async () => {
     try {
       await createCategory.mutateAsync({
+        budgetId: budget.id,
         name: categoryName,
         allocatedAmount: categoryAmount,
         color: categoryColor,
@@ -148,8 +259,8 @@ export default function Budget() {
       setIsAddCategoryOpen(false);
       setCategoryName("");
       setCategoryAmount("");
-    } catch (error) {
-      console.error("Failed to create category:", error);
+    } catch (e) {
+      console.error("Failed to create category:", e);
     }
   };
 
@@ -174,8 +285,8 @@ export default function Budget() {
       });
       setIsEditCategoryOpen(false);
       setEditingCategory(null);
-    } catch (error) {
-      console.error("Failed to update category:", error);
+    } catch (e) {
+      console.error("Failed to update category:", e);
     }
   };
 
@@ -185,37 +296,79 @@ export default function Budget() {
   };
 
   const confirmDeleteCategory = async () => {
-    if (!deletingCategoryId) return;
+    if (deletingCategoryId == null) return;
     try {
-      await deleteCategory.mutateAsync(deletingCategoryId);
+      await deleteCategory.mutateAsync({ id: deletingCategoryId, budgetId: budget.id });
       setIsDeleteCategoryOpen(false);
       setDeletingCategoryId(null);
-    } catch (error) {
-      console.error("Failed to delete category:", error);
+    } catch (e) {
+      console.error("Failed to delete category:", e);
     }
   };
 
+  const canDeletePeriod = periods.length > 1;
+
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-3xl font-bold font-display tracking-tight">Monthly Budget</h1>
           <p className="text-muted-foreground mt-1">Manage your spending and savings goals</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button onClick={handleEditBudget} variant="outline" size="sm">
-            <Edit2 className="w-4 h-4" />
-            Edit Budget
-          </Button>
-          <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl font-medium text-sm flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" />
-            {budget.period}
+
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="w-full min-w-0 sm:max-w-md sm:flex-1">
+            <Label className="text-xs text-muted-foreground mb-1.5 block">Budget period</Label>
+            <Select
+              value={String(selectedBudgetId ?? budget.id)}
+              onValueChange={(v) => persistSelection(parseInt(v, 10))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a period" />
+              </SelectTrigger>
+              <SelectContent>
+                {periods.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {formatPeriodLabel(p.period)} · $
+                    {parseFloat(p.totalAmount).toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 self-end sm:self-auto">
+            <Button type="button" variant="secondary" size="sm" onClick={handleOpenNewPeriod}>
+              <CalendarPlus className="w-4 h-4" />
+              New period
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!canDeletePeriod || deleteBudgetPeriod.isPending}
+              onClick={() => setIsDeletePeriodOpen(true)}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete period
+            </Button>
+            <Button type="button" onClick={handleEditBudget} variant="outline" size="sm">
+              <Edit2 className="w-4 h-4" />
+              Edit budget
+            </Button>
+          </div>
+        </div>
+
+        <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl font-medium text-sm inline-flex items-center gap-2 w-fit">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          {formatPeriodLabel(budget.period)}
         </div>
       </div>
 
-      {/* Over Budget Warning */}
       {isOverBudget && (
         <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-6 shadow-sm animate-in slide-in-from-top-2 duration-300">
           <div className="flex items-start gap-4">
@@ -225,26 +378,37 @@ export default function Budget() {
             <div className="flex-1">
               <h3 className="text-lg font-bold text-destructive mb-1">Over Budget Warning</h3>
               <p className="text-destructive/90 mb-3">
-                Your allocated categories total <span className="font-bold">${totalAllocated.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>, 
-                which exceeds your budget of <span className="font-bold">${budgetTotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>.
+                Your allocated categories total{" "}
+                <span className="font-bold">
+                  ${totalAllocated.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                , which exceeds your budget of{" "}
+                <span className="font-bold">
+                  ${budgetTotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                .
               </p>
               <p className="text-sm font-semibold text-destructive">
-                You are over by: <span className="text-lg">${overageAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                You are over by:{" "}
+                <span className="text-lg">
+                  ${overageAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main Budget Card */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-card rounded-2xl border shadow-sm p-8">
           <div className="flex flex-col items-center">
-            <h2 className="text-lg font-semibold text-muted-foreground uppercase tracking-wider mb-2">Total Monthly Budget</h2>
+            <h2 className="text-lg font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Total Monthly Budget
+            </h2>
             <div className="text-5xl font-bold font-display text-foreground mb-8">
               ${parseFloat(budget.totalAmount).toLocaleString()}
             </div>
-            
+
             <div className="h-[400px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -261,65 +425,64 @@ export default function Budget() {
                       <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                     ))}
                   </Pie>
-                  <Tooltip 
+                  <Tooltip
                     formatter={(value: number) => `$${value.toLocaleString()}`}
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    contentStyle={{
+                      borderRadius: "12px",
+                      border: "none",
+                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                    }}
                   />
-                  <Legend 
-                    layout="vertical" 
-                    verticalAlign="middle" 
-                    align="right"
-                    iconType="circle"
-                  />
+                  <Legend layout="vertical" verticalAlign="middle" align="right" iconType="circle" />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           </div>
         </div>
 
-        {/* Sidebar Actions */}
         <div className="space-y-6">
           <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
-             <div className="relative z-10">
-               <div className="bg-white/10 w-fit p-3 rounded-xl mb-4">
-                 <TrendingUp className="w-6 h-6 text-emerald-400" />
-               </div>
-               <h3 className="text-lg font-bold mb-2">Dive Deeper</h3>
-               <p className="text-slate-300 text-sm mb-6">
-                 Analyze your spending habits to find where you can save more.
-               </p>
-               <Link href="/chat">
-                 <button className="w-full bg-white text-slate-900 py-3 rounded-xl font-semibold text-sm hover:bg-emerald-50 transition-colors">
-                   Analyze Spending
-                 </button>
-               </Link>
-             </div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+            <div className="relative z-10">
+              <div className="bg-white/10 w-fit p-3 rounded-xl mb-4">
+                <TrendingUp className="w-6 h-6 text-emerald-400" />
+              </div>
+              <h3 className="text-lg font-bold mb-2">Dive Deeper</h3>
+              <p className="text-slate-300 text-sm mb-6">
+                Analyze your spending habits to find where you can save more.
+              </p>
+              <Link href="/chat">
+                <button className="w-full bg-white text-slate-900 py-3 rounded-xl font-semibold text-sm hover:bg-emerald-50 transition-colors">
+                  Analyze Spending
+                </button>
+              </Link>
+            </div>
           </div>
 
           <div className="bg-card border p-6 rounded-2xl shadow-sm">
-             <div className="bg-primary/10 w-fit p-3 rounded-xl mb-4 text-primary">
-               <BookOpen className="w-6 h-6" />
-             </div>
-             <h3 className="text-lg font-bold mb-2 text-foreground">Budgeting 101</h3>
-             <p className="text-muted-foreground text-sm mb-6">
-               Learn the 50/30/20 rule and how to apply it to your finances.
-             </p>
-             <Link href="/modules">
-               <button className="w-full border border-border bg-background text-foreground py-3 rounded-xl font-semibold text-sm hover:bg-muted transition-colors flex items-center justify-center gap-2">
-                 Start Learning
-                 <ArrowRight className="w-4 h-4" />
-               </button>
-             </Link>
+            <div className="bg-primary/10 w-fit p-3 rounded-xl mb-4 text-primary">
+              <BookOpen className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold mb-2 text-foreground">Budgeting 101</h3>
+            <p className="text-muted-foreground text-sm mb-6">
+              Learn the 50/30/20 rule and how to apply it to your finances.
+            </p>
+            <Link href="/modules">
+              <button className="w-full border border-border bg-background text-foreground py-3 rounded-xl font-semibold text-sm hover:bg-muted transition-colors flex items-center justify-center gap-2">
+                Start Learning
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* Budget Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-card rounded-xl border shadow-sm p-4">
           <p className="text-sm text-muted-foreground mb-1">Total Budget</p>
-          <p className="text-2xl font-bold text-foreground">${budgetTotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <p className="text-2xl font-bold text-foreground">
+            ${budgetTotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
         </div>
         <div className="bg-card rounded-xl border shadow-sm p-4">
           <p className="text-sm text-muted-foreground mb-1">Total Allocated</p>
@@ -327,17 +490,20 @@ export default function Budget() {
             ${totalAllocated.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
-        <div className={`bg-card rounded-xl border shadow-sm p-4 ${isOverBudget ? "border-destructive/20 bg-destructive/5" : ""}`}>
-          <p className="text-sm text-muted-foreground mb-1">
-            {isOverBudget ? "Over Budget" : "Remaining"}
-          </p>
+        <div
+          className={`bg-card rounded-xl border shadow-sm p-4 ${isOverBudget ? "border-destructive/20 bg-destructive/5" : ""}`}
+        >
+          <p className="text-sm text-muted-foreground mb-1">{isOverBudget ? "Over Budget" : "Remaining"}</p>
           <p className={`text-2xl font-bold ${isOverBudget ? "text-destructive" : "text-emerald-600"}`}>
-            {isOverBudget ? "-" : ""}${Math.abs(budgetTotalAmount - totalAllocated).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {isOverBudget ? "-" : ""}$
+            {Math.abs(budgetTotalAmount - totalAllocated).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
           </p>
         </div>
       </div>
 
-      {/* Categories List */}
       <div className="bg-card rounded-2xl border shadow-sm p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold font-display">Budget Categories</h2>
@@ -368,11 +534,7 @@ export default function Budget() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleEditCategory(category)}
-                >
+                <Button variant="ghost" size="icon" onClick={() => handleEditCategory(category)}>
                   <Edit2 className="w-4 h-4" />
                 </Button>
                 <Button
@@ -409,33 +571,30 @@ export default function Budget() {
         </div>
       </div>
 
-      {/* Edit Budget Dialog */}
       <Dialog open={isEditBudgetOpen} onOpenChange={setIsEditBudgetOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Budget</DialogTitle>
-            <DialogDescription>
-              Update your monthly budget total and period.
-            </DialogDescription>
+            <DialogTitle>Edit budget</DialogTitle>
+            <DialogDescription>Update the total and month for this budget period.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="totalAmount">Total Amount</Label>
+              <Label htmlFor="totalAmount">Total amount</Label>
               <Input
                 id="totalAmount"
                 type="number"
                 value={budgetTotal}
                 onChange={(e) => setBudgetTotal(e.target.value)}
-                placeholder="2000.00"
+                placeholder="2000"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="period">Period</Label>
+              <Label htmlFor="periodMonth">Month</Label>
               <Input
-                id="period"
-                value={budgetPeriod}
-                onChange={(e) => setBudgetPeriod(e.target.value)}
-                placeholder="January 2025"
+                id="periodMonth"
+                type="month"
+                value={editPeriodMonth}
+                onChange={(e) => setEditPeriodMonth(e.target.value)}
               />
             </div>
           </div>
@@ -444,20 +603,83 @@ export default function Budget() {
               Cancel
             </Button>
             <Button onClick={handleSaveBudget} disabled={updateBudget.isPending}>
-              {updateBudget.isPending ? "Saving..." : "Save Changes"}
+              {updateBudget.isPending ? "Saving..." : "Save changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Add Category Dialog */}
+      <Dialog open={isNewPeriodOpen} onOpenChange={setIsNewPeriodOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New budget period</DialogTitle>
+            <DialogDescription>
+              Creates a new month with a $2,000 total and the same starter categories (you can edit them afterward).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPeriodMonth">Month</Label>
+              <Input
+                id="newPeriodMonth"
+                type="month"
+                value={newPeriodMonth}
+                onChange={(e) => setNewPeriodMonth(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newPeriodTotal">Monthly total</Label>
+              <Input
+                id="newPeriodTotal"
+                type="number"
+                value={newPeriodTotal}
+                onChange={(e) => setNewPeriodTotal(e.target.value)}
+                placeholder="2000"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNewPeriodOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveNewPeriod}
+              disabled={createBudgetPeriod.isPending || !newPeriodMonth || !newPeriodTotal}
+            >
+              {createBudgetPeriod.isPending ? "Creating..." : "Create period"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={isDeletePeriodOpen} onOpenChange={setIsDeletePeriodOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this budget period?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the period <strong>{formatPeriodLabel(budget.period)}</strong> and all of its categories.
+              You must keep at least one period.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteBudgetPeriod.isPending}
+              onClick={() => void confirmDeletePeriod()}
+            >
+              {deleteBudgetPeriod.isPending ? "Deleting..." : "Delete period"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Category</DialogTitle>
-            <DialogDescription>
-              Create a new budget category.
-            </DialogDescription>
+            <DialogDescription>Create a new budget category.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -510,14 +732,11 @@ export default function Budget() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Category Dialog */}
       <Dialog open={isEditCategoryOpen} onOpenChange={setIsEditCategoryOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Category</DialogTitle>
-            <DialogDescription>
-              Update category details.
-            </DialogDescription>
+            <DialogDescription>Update category details.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -568,7 +787,6 @@ export default function Budget() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Category Confirmation */}
       <AlertDialog open={isDeleteCategoryOpen} onOpenChange={setIsDeleteCategoryOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
