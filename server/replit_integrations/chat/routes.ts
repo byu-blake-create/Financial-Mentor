@@ -5,6 +5,29 @@ import { isAuthenticated } from "../auth";
 
 const GEMINI_DEFAULT_MODELS = ["gemini-flash-latest", "gemini-2.5-flash"];
 
+function redactSecrets(message: string): string {
+  const secrets = [
+    process.env.GEMINI_API_KEY,
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+    process.env.OPENAI_API_KEY,
+  ].filter((v): v is string => typeof v === "string" && v.length > 0);
+
+  let out = message;
+  for (const secret of secrets) {
+    // Replace exact secret if it appears.
+    out = out.split(secret).join("[REDACTED]");
+  }
+
+  // Heuristic redactions for common token formats / long blobs.
+  out = out
+    // OpenAI-like keys
+    .replace(/\bsk-[A-Za-z0-9]{10,}\b/g, "[REDACTED]")
+    // Long base64-ish / random blobs (avoid leaking provider tokens)
+    .replace(/\b[A-Za-z0-9+/_-]{80,}\b/g, "[REDACTED]");
+
+  return out;
+}
+
 // Lazy initialization of OpenAI client
 function getOpenAIClient(): OpenAI {
   const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -76,6 +99,8 @@ function formatProviderError(error: unknown): string {
       (error as { message?: string } | undefined)?.message ||
       providerMessage;
   }
+
+  providerMessage = redactSecrets(providerMessage);
 
   if (status === 403) {
     return `${providerMessage}. Verify GEMINI_API_KEY permissions and try GEMINI_MODEL=gemini-flash-latest.`;
