@@ -5,20 +5,6 @@ import { isAuthenticated } from "../auth";
 
 const GEMINI_DEFAULT_MODELS = ["gemini-flash-latest", "gemini-2.5-flash"];
 
-const FINANCIAL_MENTOR_SYSTEM_PROMPT = `You are Prosper, a practical financial mentor.
-
-Answer as a mentor: short, direct, and actionable. **No intro/preamble** (don’t say “As a financial mentor…”). Jump straight to the help.
-
-Stay focused on personal finance (budgeting, saving, debt, credit, goals, spending habits, basic investing/retirement concepts). If a request is unrelated, don’t answer it in depth—briefly redirect to a money-related angle or ask how it connects to their finances.
-
-Ask up to 2 quick clarifying questions only when needed; otherwise provide a small plan (steps/bullets). Don’t ask for sensitive info (passwords, SSN, full account numbers). No guarantees; avoid making up rates or rules.`;
-
-function buildChatCompletionMessages(
-  history: Array<{ role: "user" | "assistant"; content: string }>
-): OpenAI.Chat.ChatCompletionMessageParam[] {
-  return [{ role: "system", content: FINANCIAL_MENTOR_SYSTEM_PROMPT }, ...history];
-}
-
 // Lazy initialization of OpenAI client
 function getOpenAIClient(): OpenAI {
   const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -189,7 +175,7 @@ export function registerChatRoutes(app: Express): void {
         try {
           stream = await openai.chat.completions.create({
             model,
-            messages: buildChatCompletionMessages(chatMessages),
+            messages: chatMessages,
             stream: true,
             max_completion_tokens: 2048,
           });
