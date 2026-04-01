@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import OpenAI from "openai";
+import OpenAI, { APIError } from "openai";
 import { chatStorage } from "./storage";
 import { isAuthenticated } from "../auth";
 
@@ -42,21 +42,40 @@ function getModelCandidates(): string[] {
 }
 
 function getErrorStatus(error: unknown): number | undefined {
+  if (error instanceof APIError && typeof error.status === "number") {
+    return error.status;
+  }
   const status = (error as { status?: unknown } | undefined)?.status;
   return typeof status === "number" ? status : undefined;
 }
 
 function shouldTryNextModel(error: unknown): boolean {
   const status = getErrorStatus(error);
-  return status === 400 || status === 403 || status === 404;
+  // Retry other models for model incompatibility + transient upstream issues.
+  return (
+    status === 400 ||
+    status === 403 ||
+    status === 404 ||
+    status === 429 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  );
 }
 
 function formatProviderError(error: unknown): string {
   const status = getErrorStatus(error);
-  const providerMessage =
-    (error as { error?: { message?: string } } | undefined)?.error?.message ||
-    (error as { message?: string } | undefined)?.message ||
-    "Unknown AI provider error";
+
+  let providerMessage = "Unknown AI provider error";
+  if (error instanceof APIError) {
+    const nested = error.error as { message?: string } | undefined;
+    providerMessage = (nested?.message || error.message || providerMessage).trim();
+  } else {
+    providerMessage =
+      (error as { error?: { message?: string } } | undefined)?.error?.message ||
+      (error as { message?: string } | undefined)?.message ||
+      providerMessage;
+  }
 
   if (status === 403) {
     return `${providerMessage}. Verify GEMINI_API_KEY permissions and try GEMINI_MODEL=gemini-flash-latest.`;
@@ -64,6 +83,18 @@ function formatProviderError(error: unknown): string {
 
   if (status === 404) {
     return `${providerMessage}. The configured model may be unavailable for this key.`;
+  }
+
+  if (status === 429) {
+    return `${providerMessage} Rate limited—wait a short time and try again.`;
+  }
+
+  if (status === 502 || status === 503 || status === 504) {
+    const hint =
+      providerMessage && providerMessage !== "Unknown AI provider error"
+        ? providerMessage
+        : "The AI service is temporarily unavailable.";
+    return `${hint} Please try again in a moment.`;
   }
 
   return providerMessage;
@@ -227,8 +258,18 @@ export function registerChatRoutes(app: Express): void {
         res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
         res.end();
       } else {
-        const status = getErrorStatus(error) ?? 500;
-        res.status(status).json({ error: errorMessage });
+        const providerStatus = getErrorStatus(error);
+        // Return JSON even when upstream returns an empty body.
+        const httpStatus =
+          providerStatus === 502 || providerStatus === 503 || providerStatus === 504
+            ? 503
+            : providerStatus === 429
+              ? 429
+              : providerStatus ?? 500;
+        res.status(httpStatus).type("json").json({
+          error: errorMessage,
+          providerStatus: providerStatus ?? null,
+        });
       }
     }
   });

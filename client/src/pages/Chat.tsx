@@ -92,15 +92,22 @@ export default function Chat() {
       
       if (!res.ok) {
         let details = "";
-        try {
-          const data = await res.json() as { error?: string; message?: string };
-          details = data.error || data.message || "";
-        } catch {
+        const text = await res.text();
+        if (text.trim()) {
           try {
-            details = await res.text();
+            const data = JSON.parse(text) as { error?: string; message?: string };
+            details = data.error || data.message || text;
           } catch {
-            details = "";
+            details = text;
           }
+        }
+        if (!details) {
+          details =
+            res.status === 429
+              ? "Rate limited by the AI provider. Wait ~10–30 seconds and try again."
+              : res.status === 503
+                ? "Service unavailable (AI provider may be overloaded). Try again shortly."
+                : res.statusText || "Request failed";
         }
 
         const statusLine = `${res.status} ${res.statusText}`.trim();
