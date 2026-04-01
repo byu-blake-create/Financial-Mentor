@@ -44,7 +44,7 @@ export type GoalCategoryId =
   | "social-life"
   | "challenges";
 
-export type ProgressUnit = "usd" | "days" | "weeks";
+export type ProgressUnit = "usd" | "days" | "weeks" | "none";
 
 export type PresetGoalDefinition = {
   id: string;
@@ -430,6 +430,7 @@ export function getPresetById(id: string) {
 }
 
 export function formatGoalAmount(value: number, unit: ProgressUnit): string {
+  if (unit === "none") return "";
   if (unit === "days") {
     return `${Math.round(value)} ${value === 1 ? "day" : "days"}`;
   }
