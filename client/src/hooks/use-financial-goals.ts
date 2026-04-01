@@ -127,21 +127,25 @@ export function useFinancialGoals(userId: number | undefined) {
     (input: {
       title: string;
       targetAmount: number;
+      unit?: ProgressUnit;
       deadline: string | null;
       categoryId?: GoalCategoryId;
     }) => {
       const cat = input.categoryId
         ? GOAL_CATEGORIES.find((c) => c.id === input.categoryId)
         : undefined;
+      const unit = input.unit ?? "usd";
       createMutation.mutate({
         kind: "custom",
         title: input.title.trim(),
-        description: "Your custom goal—keep it visible and keep going.",
+        description: unit === "none"
+          ? "A milestone goal — mark it done when you're ready."
+          : "Your custom goal — keep it visible and keep going.",
         categoryLabel: cat?.label ?? "Custom",
         categoryId: input.categoryId ?? null,
         targetAmount: input.targetAmount,
         savedAmount: 0,
-        unit: "usd",
+        unit,
         deadline: input.deadline,
       });
     },
