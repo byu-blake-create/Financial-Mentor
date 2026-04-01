@@ -238,7 +238,7 @@ export default function Chat() {
           <Bot className="w-6 h-6" />
         </div>
         <div>
-          <h1 id="chat-heading" className="font-bold text-base sm:text-lg font-display text-foreground">Prosper AI Expert</h1>
+          <h1 id="chat-heading" className="font-bold text-base sm:text-lg font-display text-foreground">Prosper</h1>
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" aria-hidden="true" />
             Online & Ready to help
@@ -275,7 +275,7 @@ export default function Chat() {
             </div>
             <div>
               <p className="font-semibold text-foreground">No conversation selected</p>
-              <p className="text-sm text-muted-foreground mt-1">Click "New Chat" to start talking to Prosper AI.</p>
+              <p className="text-sm text-muted-foreground mt-1">Click "New Chat" to start talking to Prosper.</p>
             </div>
             <button
               onClick={() => createConversation.mutate()}
@@ -303,7 +303,7 @@ export default function Chat() {
                     ? "bg-emerald-800 text-white rounded-tr-none"
                     : "bg-white dark:bg-slate-800 border rounded-tl-none"
                 )}
-                aria-label={msg.role === "user" ? "Your message" : "Prosper AI response"}
+                aria-label={msg.role === "user" ? "Your message" : "Prosper response"}
               >
                 {msg.role === "assistant" && (
                   <Bot className="w-5 h-5 mt-1 shrink-0 opacity-70" aria-hidden="true" />
@@ -323,7 +323,7 @@ export default function Chat() {
             ))}
         
             {sendMessage.isPending && (
-              <div className="flex justify-start" role="status" aria-live="polite" aria-label="Prosper AI is typing">
+              <div className="flex justify-start" role="status" aria-live="polite" aria-label="Prosper is typing">
                 <div className="bg-white dark:bg-slate-800 border rounded-2xl rounded-tl-none p-4 flex items-center gap-2">
                   <Bot className="w-5 h-5 opacity-70" aria-hidden="true" />
                   <div className="flex gap-1" aria-hidden="true">
@@ -342,10 +342,10 @@ export default function Chat() {
 
       {/* Input Area */}
       <footer className="p-3 sm:p-4 bg-card border-t">
-        <form onSubmit={handleSubmit} className="flex gap-2" aria-label="Send a message to Prosper AI">
+        <form onSubmit={handleSubmit} className="flex gap-2" aria-label="Send a message to Prosper">
           <div className="relative flex-1">
             <label htmlFor="chat-message-input" className="sr-only">
-              Message to Prosper AI
+              Message to Prosper
             </label>
             <input
               id="chat-message-input"
@@ -379,7 +379,7 @@ export default function Chat() {
           </button>
         </form>
         <p id="chat-disclaimer" className="text-center text-xs text-muted-foreground mt-2">
-          Prosper AI provides financial guidance, not professional advice.
+          Prosper provides financial guidance, not professional advice.
         </p>
       </footer>
     </section>
