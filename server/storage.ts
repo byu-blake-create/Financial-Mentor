@@ -99,6 +99,23 @@ function categoryPatchRow(updates: Partial<InsertCategory>) {
   return row;
 }
 
+/** Default monthly total for new budgets (matches category seed sum). */
+export const DEFAULT_BUDGET_MONTHLY = "2000";
+
+/** Starter categories for new budget periods (sum = 2000). */
+export const DEFAULT_BUDGET_CATEGORY_SEED: ReadonlyArray<{
+  label: string;
+  allocatedAmount: string;
+  color: string;
+}> = [
+  { label: "Housing", allocatedAmount: "800", color: "#3b82f6" },
+  { label: "Groceries", allocatedAmount: "400", color: "#22c55e" },
+  { label: "Transportation", allocatedAmount: "300", color: "#eab308" },
+  { label: "Utilities", allocatedAmount: "200", color: "#f59e0b" },
+  { label: "Entertainment", allocatedAmount: "150", color: "#8b5cf6" },
+  { label: "Savings", allocatedAmount: "150", color: "#06b6d4" },
+];
+
 type TransactionRow = {
   transaction_id: number;
   user_id: number;
@@ -265,12 +282,17 @@ function userProgressToRow(insertProgress: Partial<InsertUserProgress>) {
 export interface IStorage extends IAuthStorage, IChatStorage {
   // Budget
   getUserBudget(userId: number): Promise<Budget | undefined>;
+  listUserBudgets(userId: number): Promise<Budget[]>;
+  getBudgetByIdForUser(budgetId: number, userId: number): Promise<Budget | undefined>;
   ensureUserBudget(userId: number): Promise<Budget>;
   createBudget(budget: InsertBudget): Promise<Budget>;
   updateBudget(budgetId: number, updates: Partial<InsertBudget>): Promise<Budget>;
-  
+  deleteBudgetForUser(budgetId: number, userId: number): Promise<void>;
+  seedDefaultBudgetCategories(budgetId: number): Promise<void>;
+
   // Categories
   getCategories(budgetId: number): Promise<Category[]>;
+  getCategoryById(categoryId: number): Promise<Category | undefined>;
   createCategory(category: InsertCategory): Promise<Category>;
   updateCategory(categoryId: number, updates: Partial<InsertCategory>): Promise<Category>;
   deleteCategory(categoryId: number): Promise<void>;
@@ -329,16 +351,63 @@ export class DatabaseStorage implements IStorage {
     return data ? budgetFromRow(data as BudgetRow) : undefined;
   }
 
+  async listUserBudgets(userId: number): Promise<Budget[]> {
+    const { data, error } = await supabase
+      .from("budget")
+      .select("*")
+      .eq("user_id", userId)
+      .order("date", { ascending: false, nullsFirst: false })
+      .order("budget_id", { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((r) => budgetFromRow(r as BudgetRow));
+  }
+
+  async getBudgetByIdForUser(budgetId: number, userId: number): Promise<Budget | undefined> {
+    const { data, error } = await supabase
+      .from("budget")
+      .select("*")
+      .eq("budget_id", budgetId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? budgetFromRow(data as BudgetRow) : undefined;
+  }
+
   async ensureUserBudget(userId: number): Promise<Budget> {
     const existing = await this.getUserBudget(userId);
     if (existing) return existing;
-    // Create a minimal default budget so the Budget page has something to load.
-    return await this.createBudget({
+    const now = new Date();
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const budget = await this.createBudget({
       userId,
-      monthlyLimit: "0",
+      monthlyLimit: DEFAULT_BUDGET_MONTHLY,
       weeklyLimit: "0",
-      date: new Date(),
+      date: periodStart,
     } as InsertBudget);
+    await this.seedDefaultBudgetCategories(budget.id);
+    return budget;
+  }
+
+  async seedDefaultBudgetCategories(budgetId: number): Promise<void> {
+    for (const row of DEFAULT_BUDGET_CATEGORY_SEED) {
+      await this.createCategory({
+        budgetId,
+        label: row.label,
+        allocatedAmount: row.allocatedAmount,
+        color: row.color,
+      });
+    }
+  }
+
+  async deleteBudgetForUser(budgetId: number, userId: number): Promise<void> {
+    const { data, error } = await supabase
+      .from("budget")
+      .delete()
+      .eq("budget_id", budgetId)
+      .eq("user_id", userId)
+      .select("budget_id");
+    if (error) throw error;
+    if (!data?.length) throw new Error("Budget not found");
   }
 
   async createBudget(insertBudget: InsertBudget): Promise<Budget> {
@@ -359,6 +428,16 @@ export class DatabaseStorage implements IStorage {
       .order("category_id", { ascending: true });
     if (error) throw error;
     return (data ?? []).map((r) => categoryFromRow(r as CategoryRow));
+  }
+
+  async getCategoryById(categoryId: number): Promise<Category | undefined> {
+    const { data, error } = await supabase
+      .from("budget_categories")
+      .select("*")
+      .eq("category_id", categoryId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? categoryFromRow(data as CategoryRow) : undefined;
   }
 
   async createCategory(insertCategory: InsertCategory): Promise<Category> {
