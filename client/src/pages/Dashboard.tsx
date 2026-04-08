@@ -1,23 +1,19 @@
-import { useDashboardData } from "@/hooks/use-dashboard";
-import { StatCard } from "@/components/ui/StatCard";
 import { ModuleCard } from "@/components/ui/ModuleCard";
-import { 
-  CreditCard, 
-  TrendingUp, 
-  AlertCircle, 
-  ArrowRight,
-  Wallet,
-  ShoppingBag
-} from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { format } from "date-fns";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link } from "wouter";
+import { StatCard } from "@/components/ui/StatCard";
 import { useAuth } from "@/hooks/use-auth";
+import { useDashboardData } from "@/hooks/use-dashboard";
+import { useFinancialGoals } from "@/hooks/use-financial-goals";
+import { formatGoalAmount } from "@/lib/financial-goals-data";
+import { AlertCircle, ArrowRight, Target, TrendingUp } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { Link } from "wouter";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { data, isLoading } = useDashboardData();
+  const { goals, hydrated: goalsHydrated } = useFinancialGoals(user?.id);
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -69,18 +65,17 @@ export default function Dashboard() {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold font-display">
-          Welcome back, {user?.firstName || 'Friend'}!
+          Welcome back, {user?.firstName || "Friend"}!
         </h1>
         <p className="text-muted-foreground">
-          Here's what's happening with your finances today.
+          Here's what's happening with your finances and learning today.
         </p>
       </div>
 
-      {/* Top Section: Budget Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link href="/budget">
-          <StatCard 
-            title="Monthly budget" 
+          <StatCard
+            title="Monthly budget"
             value={
               hasMonthlyBudget
                 ? `$${monthlyTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
@@ -109,12 +104,12 @@ export default function Dashboard() {
                         <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                       ))}
                     </Pie>
-                    <Tooltip 
+                    <Tooltip
                       formatter={(value: number, name: string) => [
                         `$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
                         name === "Used" ? "Used" : "Remaining",
                       ]}
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -156,7 +151,6 @@ export default function Dashboard() {
           </StatCard>
         </Link>
 
-        {/* AI Insight Card */}
         <div className="md:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-8 relative overflow-hidden group shadow-lg">
           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
           <div className="relative z-10 flex flex-col h-full justify-between">
@@ -168,14 +162,14 @@ export default function Dashboard() {
                 AI INSIGHT
               </span>
             </div>
-            
+
             <div className="mt-6">
-              <h3 className="text-xl font-bold font-display mb-3">AI Financial Expert's Thoughts</h3>
+              <h3 className="text-xl font-bold font-display mb-3">AI Financial Expert&apos;s Thoughts</h3>
               <p className="text-slate-300 leading-relaxed mb-6 max-w-lg">
-                You have not been contributing to your savings goal this month. 
+                You have not been contributing to your savings goal this month.
                 Based on your recent transaction history, here is a strategy to cut back on discretionary spending.
               </p>
-              
+
               <Link href="/chat">
                 <button className="flex items-center gap-2 text-sm font-semibold bg-white text-slate-900 px-5 py-2.5 rounded-xl hover:bg-emerald-50 transition-colors shadow-lg shadow-black/20">
                   View Recommendations
@@ -187,61 +181,118 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Middle Section: Modules Grid */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold font-display">Suggested for you</h2>
-          <Link href="/modules" className="text-sm font-medium text-primary hover:underline">View All</Link>
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...data.modules.recent, ...data.modules.recommended]
-            .slice(0, 4)
-            .map((module) => (
-              <ModuleCard key={module.id} {...module} />
-            ))}
-        </div>
+      <div className="space-y-8">
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold font-display">Up Next</h2>
+            <Link href="/modules" className="text-sm font-medium text-primary hover:underline">
+              View All
+            </Link>
+          </div>
+
+          {data.modules.upNext.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+              {data.modules.upNext.map((module) => (
+                <ModuleCard key={module.id} {...module} />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-card rounded-2xl border shadow-sm p-6 text-sm text-muted-foreground">
+              You&apos;ve finished every module currently available.
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold font-display">Watchlist</h2>
+            <Link href="/modules" className="text-sm font-medium text-primary hover:underline">
+              Browse Modules
+            </Link>
+          </div>
+
+          {data.modules.watchlist.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+              {data.modules.watchlist.map((module) => (
+                <ModuleCard key={module.id} {...module} />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-card rounded-2xl border shadow-sm p-6 text-sm text-muted-foreground">
+              Save modules for later from any module detail page to build your watchlist.
+            </div>
+          )}
+        </section>
       </div>
 
-      {/* Bottom Section: Recent Transactions */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold font-display">Recent Transactions</h2>
-          <Link href="/transactions" className="text-sm font-medium text-primary hover:underline">View All</Link>
+          <h2 className="text-xl font-bold font-display flex items-center gap-2">
+            <Target className="h-5 w-5 text-primary" />
+            Goals preview
+          </h2>
+          <Link href="/goals" className="text-sm font-medium text-primary hover:underline">
+            View All
+          </Link>
         </div>
-        
+
         <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-          {data.recentTransactions.map((tx, index) => (
-            <div 
-              key={tx.id} 
-              className={`flex items-center justify-between p-4 hover:bg-muted/30 transition-colors ${
-                index !== data.recentTransactions.length - 1 ? 'border-b' : ''
-              }`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                  {tx.description.toLowerCase().includes('shopping') ? (
-                    <ShoppingBag className="w-5 h-5" />
-                  ) : tx.description.toLowerCase().includes('transfer') ? (
-                    <Wallet className="w-5 h-5" />
-                  ) : (
-                    <CreditCard className="w-5 h-5" />
-                  )}
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground">{tx.description}</p>
-                  <p className="text-xs text-muted-foreground">{format(new Date(tx.date), 'MMM d, yyyy')}</p>
-                </div>
+          {!goalsHydrated ? (
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-64" />
+                <Skeleton className="h-4 w-48" />
               </div>
-              <span className="font-mono font-medium text-foreground">
-                -${parseFloat(tx.amount).toFixed(2)}
-              </span>
+              <Skeleton className="h-3 w-full rounded-full" />
+              <div className="space-y-2 pt-2">
+                <Skeleton className="h-5 w-56" />
+                <Skeleton className="h-4 w-44" />
+              </div>
+              <Skeleton className="h-3 w-full rounded-full" />
             </div>
-          ))}
-          
-          {data.recentTransactions.length === 0 && (
-            <div className="p-8 text-center text-muted-foreground">
-              No recent transactions found.
+          ) : goals.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground space-y-3">
+              <p className="font-medium text-foreground">No goals yet.</p>
+              <p className="text-sm">
+                Add a goal to keep your priorities front and center.
+              </p>
+              <Link href="/goals" className="inline-flex text-sm font-medium text-primary hover:underline">
+                Create your first goal
+              </Link>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {goals.slice(0, 3).map((g) => {
+                const pct =
+                  g.targetAmount > 0
+                    ? Math.min(100, Math.round((g.savedAmount / g.targetAmount) * 100))
+                    : 0;
+
+                return (
+                  <div key={g.id} className="p-4 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">{g.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                          {formatGoalAmount(g.savedAmount, g.unit)} / {formatGoalAmount(g.targetAmount, g.unit)}
+                        </p>
+                      </div>
+                      <span className="text-xs font-semibold text-muted-foreground tabular-nums shrink-0">
+                        {pct}%
+                      </span>
+                    </div>
+                    <div className="mt-3">
+                      <Progress value={pct} className="h-2" />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {goals.length > 3 && (
+                <div className="p-4 text-sm text-muted-foreground">
+                  +{goals.length - 3} more goal{goals.length - 3 === 1 ? "" : "s"}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -91,6 +91,9 @@ CREATE INDEX IF NOT EXISTS idx_user_progress_user_id ON user_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_progress_module_id ON user_progress(module_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
+ALTER TABLE user_progress
+    ADD COLUMN IF NOT EXISTS watch_later BOOLEAN DEFAULT FALSE NOT NULL;
+
 -- Create a function to update the updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

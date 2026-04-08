@@ -8,6 +8,7 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import { authStorage } from "./storage";
+import { storage } from "../../storage";
 
 const getOidcConfig = memoize(
   async () => {
@@ -49,12 +50,14 @@ function updateUserSession(
 }
 
 async function upsertUser(claims: any) {
-  return authStorage.upsertUser({
+  const user = await authStorage.upsertUser({
     email: claims["email"],
     password: "replit-oauth",
     firstName: claims["first_name"],
     lastName: claims["last_name"],
   });
+  await storage.ensureUserBudget(user.id);
+  return user;
 }
 
 export async function setupAuth(app: Express) {
@@ -130,6 +133,8 @@ export async function setupAuth(app: Express) {
           firstName: firstName || null,
           lastName: lastName || null,
         });
+
+        await storage.ensureUserBudget(newUser.id);
 
         // Automatically log in the new user
         const sessionUser = {

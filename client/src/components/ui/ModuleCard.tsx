@@ -1,7 +1,7 @@
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Bookmark, Check, PlayCircle } from "lucide-react";
 import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
 
 interface ModuleCardProps {
   id: number;
@@ -118,6 +118,12 @@ export function ModuleCard({
             <h4 className="font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-tight">
               {title}
             </h4>
+            {watchLater && !watched && (
+              <div className="mt-3 inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                <Bookmark className="h-3 w-3 fill-current" />
+                Watchlist
+              </div>
+            )}
           </div>
         </div>
       </Link>

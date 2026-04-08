@@ -16,7 +16,8 @@ import Budget from "@/pages/Budget";
 import Modules from "@/pages/Modules";
 import ModuleDetail from "@/pages/ModuleDetail";
 import Chat from "@/pages/Chat";
-import Transactions from "@/pages/Transactions";
+import FinancialGoals from "@/pages/FinancialGoals";
+import EditProfileInformation from "@/pages/EditProfileInformation";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 
@@ -50,7 +51,7 @@ function Router() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-muted-foreground font-medium animate-pulse">Loading Prosper AI...</p>
+          <p className="text-muted-foreground font-medium animate-pulse">Loading Prosper...</p>
         </div>
       </div>
     );
@@ -73,7 +74,8 @@ function Router() {
         <Route path="/modules/:id" component={ModuleDetail} />
         <Route path="/modules" component={Modules} />
         <Route path="/chat" component={Chat} />
-        <Route path="/transactions" component={Transactions} />
+        <Route path="/goals" component={FinancialGoals} />
+        <Route path="/edit-profile" component={EditProfileInformation} />
         <Route component={NotFound} />
       </Switch>
     </ProtectedLayout>

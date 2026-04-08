@@ -7,14 +7,14 @@ import {
   MessageSquare, 
   LogOut,
   UserCircle,
-  Receipt
+  Target,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Budget", href: "/budget", icon: PieChart },
-  { name: "Transactions", href: "/transactions", icon: Receipt },
+  { name: "Goals", href: "/goals", icon: Target },
   { name: "Modules", href: "/modules", icon: BookOpen },
   { name: "Chat Expert", href: "/chat", icon: MessageSquare },
 ];
@@ -31,7 +31,7 @@ export function Sidebar() {
             <PieChart className="h-6 w-6 text-white" />
           </div>
           <span className="text-xl font-bold tracking-tight text-foreground font-display">
-            Prosper AI
+            Prosper
           </span>
         </div>
       </div>
@@ -82,6 +82,14 @@ export function Sidebar() {
               {user?.email || 'user@example.com'}
             </p>
           </div>
+          <Link
+            href="/edit-profile"
+            aria-label="Edit profile"
+            title="Edit profile"
+            className="rounded-lg p-2 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+          >
+            <UserCircle className="h-5 w-5" />
+          </Link>
           <button 
             onClick={() => logout()}
             className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
@@ -96,7 +104,7 @@ export function Sidebar() {
 
 export function MobileHeader() {
   const [location] = useLocation();
-  const activePage = navigation.find(n => n.href === location)?.name || "Prosper AI";
+  const activePage = navigation.find(n => n.href === location)?.name || "Prosper";
 
   return (
     <div className="md:hidden flex h-16 items-center justify-between border-b px-4 bg-background sticky top-0 z-50">

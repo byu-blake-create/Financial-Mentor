@@ -61,6 +61,33 @@ export const userProgress = pgTable("user_progress", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const moduleFeedback = pgTable("module_feedback", {
+  id: serial("feedback_id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  moduleId: integer("module_id").notNull().references(() => modules.id, { onDelete: "cascade" }),
+  rating: integer("rating").notNull(),
+  comment: text("comment"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const goals = pgTable("goals", {
+  id: serial("goal_id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: varchar("kind", { length: 10 }).notNull().default("custom"),
+  presetId: varchar("preset_id", { length: 100 }),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  categoryLabel: varchar("category_label", { length: 100 }),
+  categoryId: varchar("category_id", { length: 50 }),
+  targetAmount: numeric("target_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  savedAmount: numeric("saved_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  unit: varchar("unit", { length: 10 }).notNull().default("usd"),
+  deadline: timestamp("deadline"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // === RELATIONS ===
 
 export const budgetsRelations = relations(budgets, ({ many }) => ({
@@ -81,6 +108,13 @@ export const insertCategorySchema = createInsertSchema(categories).omit({ id: tr
 export const insertTransactionSchema = createInsertSchema(transactions).omit({ id: true });
 export const insertModuleSchema = createInsertSchema(modules).omit({ id: true });
 export const insertUserProgressSchema = createInsertSchema(userProgress).omit({ id: true });
+export const insertModuleFeedbackSchema = createInsertSchema(moduleFeedback)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    rating: z.number().int().min(1).max(10),
+    comment: z.string().max(500).nullable().optional(),
+  });
+export const insertGoalSchema = createInsertSchema(goals).omit({ id: true, createdAt: true, updatedAt: true });
 
 // === TYPES ===
 
@@ -98,6 +132,12 @@ export type InsertModule = z.infer<typeof insertModuleSchema>;
 
 export type UserProgress = typeof userProgress.$inferSelect;
 export type InsertUserProgress = z.infer<typeof insertUserProgressSchema>;
+
+export type ModuleFeedback = typeof moduleFeedback.$inferSelect;
+export type InsertModuleFeedback = z.infer<typeof insertModuleFeedbackSchema>;
+
+export type Goal = typeof goals.$inferSelect;
+export type InsertGoal = z.infer<typeof insertGoalSchema>;
 
 // === API TYPES ===
 
